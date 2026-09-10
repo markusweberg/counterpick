@@ -1,0 +1,35 @@
+# ── .NET ─────────────────────────────────────────────
+bin/
+obj/
+*.user
+*.suo
+.vs/
+artifacts/
+
+# ── Node ─────────────────────────────────────────────
+node_modules/
+dist/
+*.tsbuildinfo
+
+# ── Secrets ──────────────────────────────────────────
+# The Anthropic API key lives in user-local config, never in the repo.
+appsettings.Local.json
+.env
+.env.*
+!.env.example
+secrets.json
+
+# ── Runtime data ─────────────────────────────────────
+# Champion art is fetched from Data Dragon on first run and cached locally.
+# Notes/briefs live in a local SQLite file. Neither belongs in git.
+cache/
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# ── OS / editor ──────────────────────────────────────
+Thumbs.db
+desktop.ini
+.DS_Store
+*.swp

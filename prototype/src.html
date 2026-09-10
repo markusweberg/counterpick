@@ -1,0 +1,553 @@
+<title>Counterpick</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+:root{
+  color-scheme: dark;
+  --ground:#0B1119; --surface:#121A26; --raised:#18212F; --sunk:#080D14;
+  --line:#26334580; --line-hard:#2B3A4D;
+  --ink:#EDE7DA; --ink-2:#A6B2C2; --ink-3:#6D7B8E;
+  --gold:#D9A54C; --gold-deep:#8C6A2C; --gold-wash:#D9A54C1A;
+  --ally:#5AA9DC; --enemy:#D9564B;
+  --fav:#5FB894; --even:#8FA0B8; --hard:#D97F3C; --lose:#D9564B;
+  --display:"Cinzel","Times New Roman",serif;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  --bevel:polygon(17% 0,83% 0,100% 17%,100% 83%,83% 100%,17% 100%,0 83%,0 17%);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button,select{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+img{display:block;max-width:100%}
+h2,h3,h4{text-wrap:balance}
+
+.app{display:flex;flex-direction:column;min-height:100svh}
+
+/* -- topbar -- */
+.topbar{display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding:11px 20px;background:var(--sunk);border-bottom:1px solid var(--line-hard)}
+.wordmark{font-family:var(--display);font-weight:700;font-size:16px;letter-spacing:.10em;color:var(--gold);text-transform:uppercase;white-space:nowrap}
+.wordmark span{color:var(--ink-3)}
+
+.steps{display:flex;gap:1px;background:var(--line-hard)}
+.step{background:var(--surface);padding:6px 13px;font-family:var(--mono);font-size:10px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3);transition:color .14s ease,background .14s ease}
+.step:hover{color:var(--ink-2)}
+.step[aria-current="true"]{background:var(--raised);color:var(--gold)}
+.step[disabled]{color:#42506180;cursor:default}
+
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.lcu{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--ink-2)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--fav);animation:pulse 2.4s ease-out infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 #5FB89455}70%{box-shadow:0 0 0 7px #5FB89400}100%{box-shadow:0 0 0 0 #5FB89400}}
+@media (prefers-reduced-motion:reduce){.dot{animation:none}}
+.clock{display:flex;align-items:baseline;gap:8px}
+.clock .t{font-family:var(--mono);font-weight:600;font-size:19px;font-variant-numeric:tabular-nums}
+.clock .l{font-family:var(--mono);font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+
+/* -- hero -- */
+.hero{position:relative;height:236px;overflow:hidden;background:var(--sunk);border-bottom:1px solid var(--line-hard)}
+.hero-side{position:absolute;inset:0;background-size:cover;background-repeat:no-repeat}
+.hero-side.me{clip-path:polygon(0 0,55% 0,47% 100%,0 100%)}
+.hero-side.foe{clip-path:polygon(0 0,54% 0,46% 100%,0 100%);transform:scaleX(-1)}
+.hero-scrim{position:absolute;inset:0;background:
+  linear-gradient(180deg,#080D14CC 0%,#080D1440 30%,#080D1466 58%,#080D14F2 100%),
+  radial-gradient(120% 90% at 50% 50%,transparent 30%,#080D1499 100%)}
+.hero-seam{position:absolute;inset:0;clip-path:polygon(54.7% 0,55.3% 0,47.3% 100%,46.7% 100%);
+  background:linear-gradient(180deg,#D9A54C00,#D9A54CCC 45%,#D9A54C00)}
+.hero-none{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+
+.hero-txt{position:absolute;inset:auto 0 0 0;display:flex;align-items:flex-end;gap:14px;padding:16px 22px}
+.h-name{font-family:var(--display);font-weight:700;font-size:29px;letter-spacing:.03em;margin:0;line-height:1;text-shadow:0 2px 14px #080D14}
+.h-cls{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-2);margin-bottom:6px;text-shadow:0 1px 6px #080D14}
+.h-foe{margin-left:auto;text-align:right}
+.h-foe .h-name{color:#F0B4AE}
+.h-foe .h-cls{color:var(--enemy)}
+.h-mid{text-align:center;padding-bottom:2px}
+.h-score{display:block;font-family:var(--mono);font-weight:600;font-size:23px;line-height:1;font-variant-numeric:tabular-nums;color:var(--gold);text-shadow:0 2px 10px #080D14}
+.h-scorel{display:block;font-family:var(--mono);font-size:8.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);margin-top:3px}
+.h-flag{position:absolute;top:14px;left:22px;font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);background:#080D14CC;border:1px solid var(--gold-deep);padding:4px 10px}
+.h-flag.locked{color:var(--fav);border-color:#5FB89466}
+
+/* -- board -- */
+.board{display:grid;grid-template-columns:1fr auto 1fr;gap:18px;align-items:start;padding:14px 20px;background:var(--surface);border-bottom:1px solid var(--line-hard)}
+.side-label{display:flex;align-items:center;gap:8px;margin-bottom:9px;font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase}
+.side-label .bar{width:16px;height:2px}
+.side-ally{color:var(--ally)} .side-ally .bar{background:var(--ally)}
+.side-enemy{color:var(--enemy)} .side-enemy .bar{background:var(--enemy)}
+.side-enemy .side-label,.side-enemy .row{justify-content:flex-end}
+.row{display:flex;gap:7px;flex-wrap:wrap}
+.vs{align-self:center;font-family:var(--display);font-weight:600;font-size:12px;letter-spacing:.16em;color:var(--ink-3);padding-top:20px}
+
+.slot{width:86px;display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center}
+.port{width:48px;height:48px;clip-path:var(--bevel);background:var(--sunk);overflow:hidden;flex:none}
+.port img{width:100%;height:100%;object-fit:cover}
+.port.empty{display:grid;place-items:center;box-shadow:inset 0 0 0 1px var(--line-hard);font-family:var(--mono);font-size:14px;color:#3A4757}
+.slot .nm{font-family:var(--display);font-weight:600;font-size:11.5px;letter-spacing:.03em;line-height:1.2}
+.slot .rl{font-family:var(--mono);font-size:9px;letter-spacing:.10em;text-transform:uppercase;color:var(--ink-3)}
+.slot.pending .nm{color:var(--ink-3);font-family:var(--sans);font-weight:500;font-size:10.5px;letter-spacing:0}
+.slot.you .port{box-shadow:0 0 0 1.5px var(--gold),0 0 18px -5px var(--gold)}
+.slot.you .rl{color:var(--gold)}
+.slot.lane .port{box-shadow:0 0 0 1.5px var(--enemy)}
+
+.rolesel{appearance:none;font-family:var(--mono);font-size:9px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink-2);background:var(--sunk);border:1px solid var(--line-hard);padding:2px 15px 2px 6px;width:100%;
+  background-image:linear-gradient(45deg,transparent 50%,var(--ink-3) 50%),linear-gradient(135deg,var(--ink-3) 50%,transparent 50%);
+  background-position:calc(100% - 8px) 9px,calc(100% - 5px) 9px;background-size:3px 3px,3px 3px;background-repeat:no-repeat}
+.rolesel:hover{border-color:var(--gold-deep);color:var(--ink)}
+.rolesel.is-lane{color:var(--enemy);border-color:#D9564B66}
+
+/* -- main -- */
+main{flex:1;padding:18px 20px 44px}
+.bar{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+.eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold-deep);margin:0 0 4px}
+.subnote{font-size:12px;color:var(--ink-3);margin:0;line-height:1.45;max-width:62ch}
+.bar-cta{margin-left:auto}
+
+.lock{background:var(--gold);color:#0B1119;padding:11px 24px;clip-path:var(--bevel);font-family:var(--mono);font-weight:600;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;transition:filter .14s ease}
+.lock:hover{filter:brightness(1.12)}
+.ghost{background:var(--raised);border:1px solid var(--line-hard);padding:10px 20px;font-family:var(--mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-2);transition:color .14s,border-color .14s}
+.ghost:hover{color:var(--gold);border-color:var(--gold-deep)}
+
+/* -- recommendation cards -- */
+.recs{display:grid;grid-template-columns:repeat(auto-fit,minmax(292px,1fr));gap:1px;background:var(--line-hard)}
+.rec{background:var(--surface);cursor:pointer;text-align:left;padding:13px 15px 15px;position:relative;transition:background .14s ease}
+.rec:hover{background:var(--raised)}
+.rec[aria-pressed="true"]{background:var(--raised);box-shadow:inset 0 0 0 1px var(--gold-deep),inset 3px 0 0 var(--gold)}
+.rec-top{display:flex;align-items:center;gap:11px}
+.rec .port{width:42px;height:42px}
+.rec-id{flex:1;min-width:0}
+.rec .nm{font-family:var(--display);font-weight:600;font-size:15px;letter-spacing:.03em;display:block;line-height:1.15}
+.rec .cls{font-family:var(--mono);font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+.rec .score{font-family:var(--mono);font-weight:600;font-size:19px;font-variant-numeric:tabular-nums;color:var(--ink-2);line-height:1}
+.rec[aria-pressed="true"] .score{color:var(--gold)}
+.meter{display:block;height:2px;background:var(--sunk);margin:11px 0 9px}
+.meter i{display:block;height:100%}
+.rec-chips{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+.chip{display:inline-block;font-family:var(--mono);font-size:9px;font-weight:500;letter-spacing:.11em;text-transform:uppercase;padding:2px 7px;border:1px solid currentColor}
+.d-fav{color:var(--fav)}.d-even{color:var(--even)}.d-hard{color:var(--hard)}.d-lose{color:var(--lose)}
+.badge1{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);background:var(--gold-wash);padding:3px 7px}
+.rec .why{font-size:12.5px;line-height:1.45;color:var(--ink);margin:0 0 10px;text-wrap:pretty}
+.hints{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}
+.hints li{font-size:11.5px;line-height:1.4;color:var(--ink-3);padding-left:12px;position:relative}
+.hints li::before{content:"";position:absolute;left:0;top:7px;width:4px;height:1px;background:var(--ink-3)}
+
+/* re-scoring notice */
+.notice{background:var(--surface);border-left:2px solid var(--hard);padding:18px 20px;max-width:70ch}
+.notice h3{font-family:var(--display);font-weight:600;font-size:17px;margin:0 0 8px;letter-spacing:.02em}
+.notice p{margin:0 0 14px;font-size:13px;line-height:1.6;color:var(--ink-2)}
+
+/* -- brief -- */
+.sect{margin-top:26px}
+.sect h3{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--gold-deep);margin:0 0 12px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+.headline{font-size:15.5px;line-height:1.55;margin:0;max-width:66ch;text-wrap:pretty}
+.beats{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:11px}
+.beat{display:grid;grid-template-columns:74px minmax(0,1fr);gap:14px;align-items:baseline}
+.beat .mark{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);text-align:right}
+.beat p{margin:0;font-size:13.5px;line-height:1.5;color:var(--ink-2);max-width:64ch}
+.beat p strong,.para strong{color:var(--ink);font-weight:600}
+.windows{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1px;background:var(--line-hard)}
+.win{background:var(--surface);padding:13px 15px}
+.win h4{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.11em;text-transform:uppercase;margin:0 0 9px;display:flex;align-items:center;gap:7px}
+.win h4::before{content:"";width:14px;height:2px;background:currentColor}
+.win.mine h4{color:var(--fav)} .win.theirs h4{color:var(--enemy)}
+.win ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:7px}
+.win li{font-size:12.5px;line-height:1.45;color:var(--ink-2);padding-left:13px;position:relative}
+.win li::before{content:"";position:absolute;left:0;top:8px;width:4px;height:4px;background:var(--ink-3)}
+.para{margin:0;font-size:13.5px;line-height:1.6;color:var(--ink-2);max-width:68ch}
+.setup{display:flex;gap:1px;flex-wrap:wrap;background:var(--line-hard);margin-bottom:12px}
+.kv{background:var(--surface);padding:10px 15px;flex:1 1 165px}
+.kv .k{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3);margin-bottom:3px}
+.kv .v{font-size:13px;font-weight:500}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:26px}
+
+/* -- notes -- */
+.note{border-left:2px solid var(--gold-deep);padding:2px 0 2px 13px;margin-bottom:12px}
+.note .d{font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--ink-3);display:block;margin-bottom:3px}
+.note p{margin:0;font-size:13px;line-height:1.5;color:var(--ink-2);max-width:64ch}
+.empty-note{font-size:12.5px;color:var(--ink-3);font-style:italic;margin:0 0 12px}
+.noteform{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;max-width:70ch}
+.noteform input{flex:1 1 260px;min-width:0;background:var(--sunk);border:1px solid var(--line-hard);color:var(--ink);font-family:var(--sans);font-size:13px;padding:10px 12px}
+.noteform input::placeholder{color:var(--ink-3)}
+.noteform input:focus{border-color:var(--gold-deep)}
+
+.result{display:flex;gap:1px;background:var(--line-hard);width:max-content;margin-bottom:20px}
+.res{background:var(--surface);padding:9px 26px;font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);transition:color .14s,background .14s}
+.res:hover{color:var(--ink-2)}
+.res[aria-pressed="true"]{background:var(--raised)}
+.res.w[aria-pressed="true"]{color:var(--fav)} .res.l[aria-pressed="true"]{color:var(--enemy)}
+
+.proto{margin:34px 0 0;padding:12px 15px;background:var(--surface);border-left:2px solid var(--line-hard);font-size:12px;line-height:1.55;color:var(--ink-3);max-width:74ch}
+.proto b{color:var(--ink-2);font-weight:600}
+
+@media (max-width:860px){
+  .board{grid-template-columns:1fr;gap:12px}
+  .vs{display:none}
+  .side-enemy .side-label,.side-enemy .row{justify-content:flex-start}
+}
+@media (max-width:520px){
+  .topbar,.board{padding-inline:16px}
+  main{padding-inline:16px}
+  .hero{height:172px}
+  .hero-txt{padding:12px 16px}
+  .h-name{font-size:20px}
+  .h-score{font-size:18px}
+  .slot{width:72px}
+  .port{width:42px;height:42px}
+  .beat{grid-template-columns:1fr;gap:2px}
+  .beat .mark{text-align:left}
+}
+</style>
+
+<div class="app">
+  <header class="topbar">
+    <div class="wordmark">Counter<span>pick</span></div>
+    <nav class="steps" id="steps" aria-label="Phase"></nav>
+    <div class="topbar-right" id="tbRight"></div>
+  </header>
+  <div id="hero"></div>
+  <section class="board">
+    <div class="side-ally"><div class="side-label"><span class="bar"></span> Your team</div><div class="row" id="allyRow"></div></div>
+    <div class="vs">VS</div>
+    <div class="side-enemy"><div class="side-label"><span class="bar"></span> Enemy</div><div class="row" id="enemyRow"></div></div>
+  </section>
+  <main id="main"></main>
+</div>
+
+<script>
+/*__ART__*/
+</script>
+
+<script>
+const CH = {
+  gwen:{n:"Gwen",cls:"Skirmisher",pos:"50% 33%"},
+  jax:{n:"Jax",cls:"Skirmisher",pos:"52% 32%"},
+  ornn:{n:"Ornn",cls:"Vanguard",pos:"50% 38%"},
+  camille:{n:"Camille",cls:"Diver",pos:"50% 28%"},
+  malph:{n:"Malphite",cls:"Vanguard",pos:"46% 40%"},
+  aatrox:{n:"Aatrox",cls:"Diver",pos:"50% 32%"},
+  darius:{n:"Darius",cls:"Juggernaut",pos:"46% 26%"},
+  nidalee:{n:"Nidalee",cls:"Assassin",pos:"50% 25%"},
+  sejuani:{n:"Sejuani",cls:"Vanguard",pos:"50% 25%"},
+  ori:{n:"Orianna",cls:"Battlemage",pos:"50% 25%"}
+};
+const ROLES = ["Top","Jungle","Mid","Bot","Support"];
+const ALLY = [{id:"you",role:"Top"},{id:"sejuani",role:"Jungle"},{id:"ori",role:"Mid"},{id:null,role:"Bot"},{id:null,role:"Support"}];
+const ENEMY_PICKED = ["darius","nidalee"];
+const ENEMY_OPEN = [{role:"Mid",oncall:true},{role:"Bot"},{role:"Support"}];
+
+const DIFF={Favorable:"d-fav",Even:"d-even",Difficult:"d-hard",Losing:"d-lose"};
+const DCOL={Favorable:"var(--fav)",Even:"var(--even)",Difficult:"var(--hard)",Losing:"var(--lose)"};
+
+const POOL=[
+{id:"gwen",score:92,verdict:"Favorable",record:"7\u20133",
+ why:"Outranges his whole kit and gives this comp the damage it's missing.",
+ hints:["Q outranges everything he has","W is a real out against a Nidalee gank","Only pool champ that adds damage, not another body"],
+ headline:"She outranges him, ignores his all-in, and your team needs a damage threat far more than another frontline body. This is the pick unless their last slot turns out to be a hard-engage support.",
+ lane:[{m:"Lv 1\u20132",t:"Concede these two levels. His <strong>Q heals per champion hit on the outer blade</strong> \u2014 stand fully inside him or fully out, never on the edge."},
+  {m:"Lv 3",t:"Q max. You clear from outside his range: take the free push and hold prio for Sejuani's first path top."},
+  {m:"Lv 6",t:"Bait <strong>E, Apprehend \u2014 24s at rank 1</strong>. Once it's down you own the next twenty seconds. That's your window to walk up and shove."},
+  {m:"Bleed",t:"Count his stacks out loud. <strong>At 4, disengage for five seconds.</strong> Never trade at 4."},
+  {m:"1st back",t:"Nashor's Tooth is the spike. Before it you win short trades; after it you win the duel outright."}],
+ mine:["Any time his E is down and he's under ~60%","Inside your W with Sejuani pathing top","Post-Nashor's, level 11+, in an extended trade"],
+ theirs:["Levels 1\u20132, if he lands the blade on you twice","At 4 bleed stacks with Flash up \u2014 R executes through W","Anywhere near river with Nidalee unaccounted for"],
+ jungle:"Nidalee's first clear ends around <strong>3:15</strong>. If she hasn't shown on the map by 3:30, she's coming top and Darius will hold E for it. Ward tri at 3:00 and play the 2v2 rather than backing off \u2014 Sejuani beats her in a straight fight.",
+ comp:"Sejuani plus Orianna is a wombo comp. <strong>You are the damage that converts their engage, not the engage.</strong> Flank wide, hold W until after Sej's R connects, then Q-melt the clump. Do not go split-push after 20 minutes \u2014 this team cannot fight 4v5.",
+ setup:{Keystone:"Conqueror",Secondary:"Bone Plating \u00B7 Second Wind",Summoners:"Flash + Teleport",First:"Nashor's Tooth"},
+ setupNote:"Ignite beats his sustain in lane, but Teleport is worth more into a wombo comp than one solo kill.",
+ notes:[{d:"2026-08-28",t:"I keep auto-ing him at 4 stacks and dying to the R reset. Count out loud, out of the trade."},
+        {d:"2026-07-14",t:"W does nothing if he's standing inside it with me. Place it to break his vision, then walk out of it."}]},
+
+{id:"jax",score:84,verdict:"Favorable",record:"11\u20136",
+ why:"Beats him after 6 and gives Sejuani a diver \u2014 if you survive levels 1 to 5.",
+ hints:["E eats his Q and his autos","Matchup flips completely at level 6","Best 2v2 in your pool into Nidalee"],
+ headline:"The matchup flips completely at 6. The question isn't whether Jax wins \u2014 it's whether you get there without handing two kills to a Nidalee gank.",
+ lane:[{m:"Lv 1\u20132",t:"The worst two levels of the matchup. Take the CS you can reach with a step and nothing else."},
+  {m:"Lv 3",t:"<strong>E eats his Q and his autos.</strong> Bait the Q, E through it, W-auto out. Don't hold E for the pull \u2014 the pull isn't what kills you."},
+  {m:"Lv 6",t:"R flips it. Your full combo beats his at even items from here on."},
+  {m:"Bleed",t:"Same rule: 4 stacks means walk. His R executes through your R's armor."},
+  {m:"1st back",t:"Trinity is where you take over the side lane \u2014 but only with a ward in river."}],
+ mine:["Level 6 with E up and him under 70%","Any time he Qs the wave instead of you","Post-Trinity, side lane, vision down"],
+ theirs:["Levels 1\u20135, always","If you E early and he waits it out \u2014 E is 16s, his Q is 9s","Under his tower at any point before 11"],
+ jungle:"You are the best 2v2 champion in your pool into Nidalee once E is up \u2014 she has no hard CC to stop the leap. Ping Sejuani top at 3:00, and if Nidalee shows bot instead, invade her raptors rather than shoving.",
+ comp:"You're the follow-up dive: Sejuani engages, you leap the backline. Jax is also the only champion in this pool who can genuinely side lane in this comp \u2014 take it after the first tower falls, never before.",
+ setup:{Keystone:"Conqueror",Secondary:"Bone Plating \u00B7 Second Wind",Summoners:"Flash + Teleport",First:"Trinity Force"},
+ setupNote:"Grasp is the safer blind pick. Conqueror is right here because you're the counterpick and you know you're getting to 6.",
+ notes:[{d:"2026-08-02",t:"Stop E-ing on reaction. Walk at him, let him throw Q first, then E. Won three of four doing it that way."}]},
+
+{id:"ornn",score:79,verdict:"Even",record:"5\u20134",
+ why:"Safest pick on the board and the least useful one \u2014 Sejuani already does this job.",
+ hints:["Nothing goes wrong; nothing goes right","Second frontline in a comp that has one","Nidalee farms free for ten minutes"],
+ headline:"Nothing goes wrong in this lane and nothing goes right either. The real cost is that Nidalee farms untouched for ten minutes and your comp gets a second frontline it doesn't need.",
+ lane:[{m:"Lv 1\u20132",t:"Nothing happens. Take the CS; W to break his Q when he commits."},
+  {m:"Lv 3",t:"You lose prio and that's acceptable. Farm to 6."},
+  {m:"Lv 6",t:"R is <strong>not a lane spell</strong> into Darius. Save it for the first jungle skirmish."},
+  {m:"1st back",t:"Your item upgrades are the entire reason to take this pick \u2014 an upgraded Ludens on Orianna at 13 is a real trade."}],
+ mine:["Never, alone","With Sejuani, post-6, into a used E"],
+ theirs:["Any extended trade before your first back","Level 6+ with Ghost \u2014 he outruns Brittle"],
+ jungle:"Nidalee farms untouched if you take this. You can't punish her and you can't help Sejuani contest top side. That's the price of the safe pick, and it's higher than it looks.",
+ comp:"<strong>Redundant.</strong> Sejuani is already your frontline and your engage; a second one means nobody converts the fight. Take this only if their last pick is a hypercarry you need locked down twice.",
+ setup:{Keystone:"Grasp of the Undying",Secondary:"Bone Plating \u00B7 Overgrowth",Summoners:"Flash + Teleport",First:"Heartsteel"},
+ setupNote:"Upgrading Sejuani's and Orianna's items at 13 is worth more than anything you'll do in this lane.",
+ notes:[]},
+
+{id:"camille",score:71,verdict:"Even",record:"4\u20135",
+ why:"Wins early, loses mid-game, best follow-up to Orianna's ult in your pool.",
+ hints:["Wins levels 1\u20133, loses after 6","R is the ideal shockwave follow-up","Side laner in a comp that fights as five"],
+ headline:"A real conflict: your ultimate is the perfect answer to a shockwave, but Camille wants to be in a side lane and this comp has to fight five-on-five.",
+ lane:[{m:"Lv 1\u20132",t:"You actually win level 1 \u2014 Q-auto-Q beats his Q, as long as you're not standing on the blade."},
+  {m:"Lv 3",t:"E over the wall, take the trade, W for sustain, walk out. <strong>Never stay for a fourth auto.</strong>"},
+  {m:"Lv 6",t:"He wins the all-in from here unless you hold E and Flash. His R resets on kill; yours doesn't."},
+  {m:"1st back",t:"Sheen is your spike, but he outscales you straight through the bruiser item timings."}],
+ mine:["Levels 1\u20133 with a wall to E off","Any time his E is down and you have Ignite"],
+ theirs:["Level 6 onward in a straight all-in","If you E in without an exit \u2014 no disengage once W is spent"],
+ jungle:"Camille has the best answer to a Nidalee gank in the pool: hookshot out over the wall. Play further up the lane than instinct says.",
+ comp:"Your R locks one target in a box, which is the ideal follow-up to Orianna's ball. But you're a side laner in a comp built to fight as five, and that tension doesn't resolve itself.",
+ setup:{Keystone:"Conqueror",Secondary:"Magical Footwear \u00B7 Cosmic Insight",Summoners:"Flash + Ignite",First:"Trinity Force"},
+ setupNote:"Ignite here, not Teleport \u2014 the entire case for Camille is winning the lane before eight minutes.",
+ notes:[]},
+
+{id:"malph",score:66,verdict:"Difficult",record:"2\u20133",
+ why:"Great into AD, bad into this AD \u2014 and it's a third engage ultimate.",
+ hints:["He's AD but not an auto-attacker","Third engage ult in this comp","Worth holding until their last pick"],
+ headline:"Hold this one until their last pick. Against a diver comp Malphite jumps two tiers; against what you can see on the board right now, it's the wrong shape twice over.",
+ lane:[{m:"Lv 1\u20132",t:"He's AD but he isn't an auto-attacker. <strong>Your passive shield does very little against Q.</strong>"},
+  {m:"Lv 3",t:"Q the wave, back off. You are farming, not laning."},
+  {m:"Lv 6",t:"R is not for this lane. Spend it here and you have nothing for the next skirmish."}],
+ mine:["With Sejuani, immediately after his E","Never solo"],
+ theirs:["Any point you let him reach 5 stacks","Level 6+ with Ghost, from full HP"],
+ jungle:"You can't contest anything top side. Nidalee gets free reign and Sejuani has no partner up here.",
+ comp:"Third engage tool. Sejuani R, Orianna R, Malphite R \u2014 one of them is wasted every fight. This only makes sense if their last pick is a hyper-mobile carry you need pinned.",
+ setup:{Keystone:"Grasp of the Undying",Secondary:"Bone Plating \u00B7 Second Wind",Summoners:"Flash + Teleport",First:"Sunfire Aegis"},
+ setupNote:"Genuinely worth holding for their last pick. If they take Yone or Kai'Sa, re-score this one.",
+ notes:[]},
+
+{id:"aatrox",score:58,verdict:"Losing",record:"3\u20138",
+ why:"Loses the lane at every stage, and there are five better options on the board.",
+ hints:["His Q heals more than your passive","His R resets, yours doesn't","Comp fit is fine \u2014 the lane isn't"],
+ headline:"The comp fit is fine: a diver behind Sejuani is exactly right. It's the lane that makes this wrong, and you're the counterpick, so you don't have to take a losing one.",
+ lane:[{m:"Lv 1\u20132",t:"Q3 poke is your only tool and it isn't enough."},
+  {m:"Lv 3",t:"Do not take an extended trade. <strong>His Q heals more than your passive.</strong>"},
+  {m:"Lv 6",t:"His R resets and yours doesn't. He wins the all-in through your revive."},
+  {m:"1st back",t:"If you're losing anyway: Doran's Shield, Second Wind, play for minute fourteen."}],
+ mine:["Only with a Sejuani gank and Ignite"],
+ theirs:["Any full trade, at any level","Especially once he finishes Stridebreaker"],
+ jungle:"Nidalee will target this lane specifically, because she can see you have no escape.",
+ comp:"Fine on paper. The comp isn't the problem here.",
+ setup:{Keystone:"Conqueror",Secondary:"Triumph \u00B7 Legend: Alacrity",Summoners:"Flash + Teleport",First:"Eclipse"},
+ setupNote:"You're the last pick of the rotation. Taking a losing lane from this seat is a choice, not a constraint.",
+ notes:[{d:"2026-06-19",t:"Third time I've blind-picked this into a bruiser and regretted it. Stop."}]}
+];
+
+const state = {
+  phase:"draft", sel:"gwen", picked:null, result:null,
+  roles:{ darius:"Top", nidalee:"Jungle" }
+};
+const get = id => POOL.find(p => p.id === id);
+const laneFoe = () => Object.keys(state.roles).find(k => state.roles[k] === "Top") || null;
+const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const heroChamp = () => state.picked || state.sel;
+
+function port(id, cls=""){
+  if(!id) return `<div class="port empty ${cls}">\u00B7</div>`;
+  return `<div class="port ${cls}"><img src="${ART[id+"_sq"]}" alt="${CH[id].n}"></div>`;
+}
+
+/* -- topbar -- */
+const STEPS = [["draft","Draft"],["locked","Brief"],["after","After game"]];
+function drawTop(){
+  document.getElementById("steps").innerHTML = STEPS.map(([k,l]) =>
+    `<button class="step" data-phase="${k}" aria-current="${state.phase===k}" ${k!=="draft"&&!state.picked?"disabled":""}>${l}</button>`).join("");
+
+  const foe = laneFoe();
+  document.getElementById("tbRight").innerHTML =
+    `<div class="lcu"><span class="dot"></span> League Client \u00B7 ${
+      state.phase==="draft" ? "reading draft" : state.phase==="locked" ? "in game \u2014 Summoner's Rift" : "post-game lobby"}</div>` +
+    (state.phase==="draft"
+      ? `<div class="clock"><span class="t">0:27</span><span class="l">Your pick</span></div>`
+      : `<div class="clock"><span class="t" style="font-size:14px;color:var(--ink-2)">${
+          state.picked?CH[state.picked].n:"\u2014"} <span style="color:var(--ink-3)">vs</span> ${foe?CH[foe].n:"\u2014"}</span></div>`);
+}
+
+/* -- hero -- */
+function drawHero(){
+  const me = heroChamp(), foe = laneFoe();
+  const flag = state.phase==="draft"
+    ? `<div class="h-flag">Considering</div>`
+    : state.phase==="locked"
+      ? `<div class="h-flag locked">Locked in</div>`
+      : `<div class="h-flag locked">Game complete</div>`;
+  const p = get(me);
+  document.getElementById("hero").innerHTML = `<div class="hero">
+    ${me && ART[me+"_sp"] ? `<div class="hero-side me" style="background-image:url(${ART[me+"_sp"]});background-position:${CH[me].pos}"></div>` : ""}
+    ${foe && ART[foe+"_sp"] ? `<div class="hero-side foe" style="background-image:url(${ART[foe+"_sp"]});background-position:${CH[foe].pos}"></div>`
+      : `<div class="hero-side foe" style="background:linear-gradient(120deg,#1A1013,#0B1119)"></div>`}
+    <div class="hero-scrim"></div><div class="hero-seam"></div>${flag}
+    <div class="hero-txt">
+      <div><span class="h-cls">${CH[me].cls} \u00B7 ${state.picked?"Your champion":"Your pick"}</span><h2 class="h-name">${CH[me].n}</h2></div>
+      <div class="h-mid"><span class="h-score">${p.score}</span><span class="h-scorel">Fit</span></div>
+      <div class="h-foe"><span class="h-cls">${foe?CH[foe].cls:"Unassigned"} \u00B7 Lane opponent</span>
+        <h2 class="h-name">${foe?CH[foe].n:"Unknown"}</h2></div>
+    </div></div>`;
+}
+
+/* -- board -- */
+function drawBoard(){
+  document.getElementById("allyRow").innerHTML = ALLY.map(s => {
+    if(s.id === "you") return `<div class="slot you">${port(state.picked)}
+      <span class="nm">${state.picked?CH[state.picked].n:"You"}</span>
+      <span class="rl">${state.picked?"Locked":"Picking"}</span></div>`;
+    if(!s.id) return `<div class="slot pending">${port(null)}<span class="nm">Unpicked</span><span class="rl">${s.role}</span></div>`;
+    return `<div class="slot">${port(s.id)}<span class="nm">${CH[s.id].n}</span><span class="rl">${s.role}</span></div>`;
+  }).join("");
+
+  const foe = laneFoe();
+  const picked = ENEMY_PICKED.map(id => `<div class="slot ${id===foe?"lane":""}">
+      ${port(id)}<span class="nm">${CH[id].n}</span>
+      <select class="rolesel ${id===foe?"is-lane":""}" data-champ="${id}" aria-label="${CH[id].n} role">
+        ${ROLES.map(r=>`<option ${state.roles[id]===r?"selected":""}>${r}</option>`).join("")}
+      </select></div>`).join("");
+  const open = ENEMY_OPEN.map(s => `<div class="slot pending">${port(null)}
+      <span class="nm">${s.oncall?"Last pick":"Unpicked"}</span>
+      <span class="rl" ${s.oncall?'style="color:var(--enemy)"':""}>${s.oncall?"On the clock":s.role}</span></div>`).join("");
+  document.getElementById("enemyRow").innerHTML = picked + open;
+}
+
+/* -- phases -- */
+function draftView(){
+  const foe = laneFoe();
+  if(foe !== "darius"){
+    return `<div class="notice">
+      <h3>Re-scoring for ${foe ? CH[foe].n : "an unknown top laner"}</h3>
+      <p>You moved ${foe?CH[foe].n:"your lane opponent"} into top lane. In the real app this re-runs the whole pool against the new matchup and rewrites every recommendation \u2014 role assignment is the one input that changes everything downstream.</p>
+      <p>This prototype only carries a written scenario for Darius.</p>
+      <button class="ghost" data-act="reset-roles">Put Darius back on top</button></div>`;
+  }
+  const sel = get(state.sel);
+  return `<div class="bar">
+      <div><p class="eyebrow">Your pool \u00B7 ranked against this draft</p>
+      <p class="subnote">Scored on the Darius lane, Nidalee's jungle pressure, and how each fits alongside Sejuani and Orianna. Their last pick is still hidden.</p></div>
+      <div class="bar-cta"><button class="lock" data-act="lock">Lock in ${CH[state.sel].n}</button></div>
+    </div>
+    <div class="recs">${POOL.map((p,i) => {
+      const c = CH[p.id];
+      return `<div class="rec" role="button" tabindex="0" aria-pressed="${state.sel===p.id}" data-pick="${p.id}">
+        <span class="rec-top">${port(p.id)}
+          <span class="rec-id"><span class="nm">${c.n}</span><span class="cls">${c.cls} \u00B7 ${p.record} on record</span></span>
+          <span class="score">${p.score}</span></span>
+        <span class="meter"><i style="width:${p.score}%;background:${DCOL[p.verdict]}"></i></span>
+        <span class="rec-chips"><span class="chip ${DIFF[p.verdict]}">${p.verdict}</span>${i===0?'<span class="badge1">Recommended</span>':""}</span>
+        <p class="why">${p.why}</p>
+        <ul class="hints">${p.hints.map(h=>`<li>${h}</li>`).join("")}</ul>
+      </div>`;
+    }).join("")}</div>
+    <p class="proto"><b>Prototype.</b> Draft state is a fixed scenario; the desktop build reads it live from the League client and re-scores on every enemy lock. Recommendations are written by Claude against your pool, the enemy comp, and your saved notes.</p>`;
+}
+
+function briefView(){
+  const p = get(state.picked), c = CH[p.id], foe = laneFoe(), f = CH[foe];
+  const notes = p.notes.length
+    ? p.notes.map(n=>`<div class="note"><span class="d">${n.d}</span><p>${esc(n.t)}</p></div>`).join("")
+    : `<p class="empty-note">Nothing saved for this matchup yet. Write a line after the game and it shows up here next time.</p>`;
+  return `<div class="bar">
+      <div><p class="eyebrow">Matchup brief \u00B7 ${c.n} into ${f.n}</p>
+      <p class="subnote">Read this on the loading screen. Nothing here needs a decision in the next thirty seconds.</p></div>
+      <div class="bar-cta"><button class="ghost" data-act="after">Game over \u2192</button></div>
+    </div>
+    <p class="headline">${p.headline}</p>
+    <section class="sect"><h3>The lane</h3>
+      <ul class="beats">${p.lane.map(b=>`<li class="beat"><span class="mark">${b.m}</span><p>${b.t}</p></li>`).join("")}</ul></section>
+    <section class="sect"><h3>Kill windows</h3>
+      <div class="windows">
+        <div class="win mine"><h4>You can kill him</h4><ul>${p.mine.map(x=>`<li>${x}</li>`).join("")}</ul></div>
+        <div class="win theirs"><h4>He can kill you</h4><ul>${p.theirs.map(x=>`<li>${x}</li>`).join("")}</ul></div>
+      </div></section>
+    <div class="two">
+      <section class="sect"><h3>${f.n === "Darius" ? "Nidalee" : "Their jungler"}</h3><p class="para">${p.jungle}</p></section>
+      <section class="sect"><h3>Your job in this comp</h3><p class="para">${p.comp}</p></section>
+    </div>
+    <section class="sect"><h3>Setup</h3>
+      <div class="setup">${Object.entries(p.setup).map(([k,v])=>`<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`).join("")}</div>
+      <p class="para">${p.setupNote}</p></section>
+    <section class="sect"><h3>What you wrote last time</h3>${notes}</section>
+    <p class="proto"><b>Prototype.</b> Your own notes are folded into the prompt that writes this brief, so past lessons shape the advice rather than sitting in a separate list.</p>`;
+}
+
+function afterView(){
+  const p = get(state.picked), c = CH[p.id], foe = laneFoe(), f = CH[foe];
+  const notes = p.notes.length
+    ? p.notes.map(n=>`<div class="note"><span class="d">${n.d}</span><p>${esc(n.t)}</p></div>`).join("")
+    : `<p class="empty-note">No notes on this matchup yet.</p>`;
+  return `<div class="bar">
+      <div><p class="eyebrow">After the game \u00B7 ${c.n} into ${f.n}</p>
+      <p class="subnote">One line is enough. It goes into every future brief for this matchup and into how the pool gets scored next time.</p></div>
+      <div class="bar-cta"><button class="ghost" data-act="draft">\u2190 New draft</button></div>
+    </div>
+    <div class="result">
+      <button class="res w" data-res="win"  aria-pressed="${state.result==="win"}">Win</button>
+      <button class="res l" data-res="loss" aria-pressed="${state.result==="loss"}">Loss</button>
+    </div>
+    <section class="sect"><h3>What did you learn?</h3>
+      <form class="noteform" id="noteForm">
+        <label for="noteInput" hidden>New note</label>
+        <input id="noteInput" type="text" autocomplete="off" placeholder="e.g. Ward tri at 2:45, not 3:15 \u2014 she was there both games">
+        <button type="submit" class="ghost">Save note</button>
+      </form></section>
+    <section class="sect"><h3>Your notes on ${c.n} into ${f.n}</h3>${notes}</section>
+    <p class="proto"><b>Prototype.</b> Notes save to the local database and are injected into future briefs for this exact matchup. The real build also logs the result so the fit score reflects your record, not just theory.</p>`;
+}
+
+function render(focusNote){
+  drawTop(); drawHero(); drawBoard();
+  document.getElementById("main").innerHTML =
+    state.phase==="draft" ? draftView() : state.phase==="locked" ? briefView() : afterView();
+  if(focusNote){ const i = document.getElementById("noteInput"); if(i) i.focus(); }
+}
+
+document.addEventListener("click", e => {
+  const step = e.target.closest(".step");
+  if(step && !step.disabled){ state.phase = step.dataset.phase; render(); return; }
+
+  const rec = e.target.closest(".rec");
+  if(rec){ state.sel = rec.dataset.pick; render(); return; }
+
+  const res = e.target.closest(".res");
+  if(res){ state.result = state.result === res.dataset.res ? null : res.dataset.res; render(); return; }
+
+  const btn = e.target.closest("[data-act]");
+  if(!btn) return;
+  const a = btn.dataset.act;
+  if(a === "lock"){ state.picked = state.sel; state.phase = "locked"; }
+  if(a === "after") state.phase = "after";
+  if(a === "draft"){ state.phase = "draft"; state.picked = null; state.result = null; }
+  if(a === "reset-roles") state.roles = { darius:"Top", nidalee:"Jungle" };
+  render();
+});
+
+document.addEventListener("keydown", e => {
+  const rec = e.target.closest && e.target.closest(".rec");
+  if(rec && (e.key === "Enter" || e.key === " ")){ e.preventDefault(); state.sel = rec.dataset.pick; render(); }
+});
+
+document.addEventListener("change", e => {
+  const sel = e.target.closest(".rolesel");
+  if(!sel) return;
+  const champ = sel.dataset.champ, next = sel.value, prev = state.roles[champ];
+  const clash = Object.keys(state.roles).find(k => k !== champ && state.roles[k] === next);
+  if(clash) state.roles[clash] = prev;
+  state.roles[champ] = next;
+  render();
+});
+
+document.addEventListener("submit", e => {
+  if(e.target.id !== "noteForm") return;
+  e.preventDefault();
+  const input = document.getElementById("noteInput"), v = input.value.trim();
+  if(!v) return;
+  get(state.picked).notes.unshift({ d:new Date().toISOString().slice(0,10), t:v });
+  render(true);
+});
+
+render();
+</script>
