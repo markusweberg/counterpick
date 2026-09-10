@@ -175,13 +175,16 @@ champions and art updates arrive without a rebuild.
 
 ## Status
 
-Working: the app builds, opens, renders all three phases, and creates its own storage.
-The UI runs on the worked example in `data/scenario.ts` — blue side, top lane, pick B3,
-into Darius and Nidalee.
+Working: the app builds, opens, renders all three phases, manages its own storage, and
+the Data panel reads the real database. Champion art comes from Data Dragon at runtime.
 
-Not built yet, and stubbed in `Bridge.cs`:
+The draft views still run on the worked example in `data/scenario.ts` - blue side, top
+lane, pick B3, into Darius and Nidalee - because the two pieces that replace it are not
+built yet:
 
-- **`draft.subscribe`** — the LCU listener. Read the client's `lockfile` for the port and
-  password, open the champ-select websocket, map its payload onto `DraftState`.
-- **`brief.request`** — the Claude client. Prompt with the pool, the enemy comp and the
-  saved notes; cache the result; prefetch as soon as the lane opponent is known.
+- **`draft.subscribe`** - the League client listener
+- **`brief.request`** - the Claude client
+
+Both are stubbed in `Bridge.cs`. See **[docs/REMAINING-WORK.md](docs/REMAINING-WORK.md)**
+for the full handover: what is left, the LCU protocol detail needed to build it, and the
+decisions worth revisiting.
