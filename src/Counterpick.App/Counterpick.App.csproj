@@ -1,0 +1,70 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>Counterpick.App</RootNamespace>
+    <AssemblyName>Counterpick</AssemblyName>
+    <!-- The Vite frontend lives beside this project and is built into it. -->
+    <WebDir>$(MSBuildProjectDirectory)\..\Counterpick.Web</WebDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+  </ItemGroup>
+
+  <!--
+    Frontend build.
+
+    Coming from C#: this is the one extra step compared to a plain WPF project.
+    `npm run build` compiles the TypeScript in ../Counterpick.Web into plain JS
+    and writes it to that project's dist/ folder. Running it from MSBuild means
+    `dotnet build` still does everything - you never have to run npm by hand.
+
+    Skip it with:  dotnet build -p:SkipFrontend=true
+  -->
+  <Target Name="RestoreFrontend"
+          BeforeTargets="BuildFrontend"
+          Condition="'$(SkipFrontend)' != 'true' AND !Exists('$(WebDir)\node_modules')">
+    <Message Importance="high" Text="Counterpick: installing frontend packages (first run only)..." />
+    <Exec Command="npm install" WorkingDirectory="$(WebDir)" />
+  </Target>
+
+  <Target Name="BuildFrontend"
+          BeforeTargets="Build"
+          Condition="'$(SkipFrontend)' != 'true'">
+    <Message Importance="high" Text="Counterpick: building frontend..." />
+    <Exec Command="npm run build" WorkingDirectory="$(WebDir)" />
+  </Target>
+
+  <!--
+    Copy the built frontend next to the exe as wwwroot/. WebView2 serves it from
+    there under a virtual https:// host - see MainWindow.xaml.cs.
+
+    The item group sits inside the target on purpose: dist/ does not exist yet
+    when MSBuild evaluates the project file, so a wildcard out here would match
+    nothing on a clean checkout.
+  -->
+  <Target Name="CopyFrontend" AfterTargets="Build" Condition="'$(SkipFrontend)' != 'true'">
+    <ItemGroup>
+      <FrontendFile Include="$(WebDir)\dist\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(FrontendFile)"
+          DestinationFiles="@(FrontendFile->'$(OutDir)wwwroot\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="PublishFrontend" AfterTargets="Publish" Condition="'$(SkipFrontend)' != 'true'">
+    <ItemGroup>
+      <FrontendFile Include="$(WebDir)\dist\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(FrontendFile)"
+          DestinationFiles="@(FrontendFile->'$(PublishDir)wwwroot\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

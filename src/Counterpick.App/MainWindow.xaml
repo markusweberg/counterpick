@@ -1,0 +1,13 @@
+<Window x:Class="Counterpick.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="Counterpick"
+        Height="900" Width="1500"
+        MinHeight="560" MinWidth="820"
+        WindowStartupLocation="CenterScreen"
+        Background="#0B1119">
+    <!-- The whole UI is the web view. Background matches the page ground so a slow
+         first paint does not flash white. -->
+    <wv2:WebView2 x:Name="Web" DefaultBackgroundColor="#0B1119" />
+</Window>
