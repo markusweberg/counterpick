@@ -19,6 +19,8 @@ public partial class MainWindow : Window
 
     private readonly AppConfig _config;
     private readonly Storage _storage;
+    private readonly BriefCache _briefs;
+    private readonly BackupService _backups;
     private Bridge? _bridge;
 
     public MainWindow()
@@ -27,10 +29,26 @@ public partial class MainWindow : Window
 
         AppPaths.EnsureCreated();
         _config = AppConfig.Load();
+
         _storage = new Storage();
-        _storage.EnsureSchema();
+        _backups = new BackupService(_storage);
+
+        // Snapshot before any schema upgrade touches your notes - the riskiest moment
+        // in the app's life, and the cheapest one to insure.
+        _storage.EnsureSchema(beforeMigration: _ => _backups.Snapshot("migration"));
+
+        _briefs = new BriefCache();
+        _briefs.EnsureSchema();
+
+        // A fresh install with an empty database pulls the OneDrive mirror back in.
+        // Nothing local to lose, so no need to ask.
+        _backups.RestoreFromMirrorIfEmpty();
+
+        // One snapshot per session, and only when something actually changed.
+        _backups.SnapshotIfChanged("startup");
 
         Loaded += OnLoaded;
+        Closed += OnClosed;
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -49,7 +67,7 @@ public partial class MainWindow : Window
         core.Settings.IsSwipeNavigationEnabled = false;
         core.Settings.AreDevToolsEnabled = true;   // F12 stays available; this is a personal tool
 
-        _bridge = new Bridge(Web, _storage, _config);
+        _bridge = new Bridge(Web, _storage, _config, _backups);
 
         // Open real links in the user's browser instead of hijacking the app window.
         core.NewWindowRequested += (_, args) =>
@@ -63,6 +81,21 @@ public partial class MainWindow : Window
         };
 
         Web.Source = ResolveUiSource(core);
+    }
+
+    /// <summary>
+    /// Capture whatever was written this session before the process goes away.
+    /// </summary>
+    private void OnClosed(object? sender, EventArgs e)
+    {
+        try
+        {
+            _backups.SnapshotIfChanged("shutdown");
+        }
+        catch (Exception)
+        {
+            // Never block shutdown over a backup; the next startup takes one.
+        }
     }
 
     /// <summary>

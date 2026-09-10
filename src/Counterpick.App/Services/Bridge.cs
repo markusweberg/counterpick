@@ -19,17 +19,19 @@ public sealed class Bridge
     private readonly WebView2 _web;
     private readonly Storage _storage;
     private readonly AppConfig _config;
+    private readonly BackupService _backups;
 
     private static readonly JsonSerializerOptions Json = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    public Bridge(WebView2 web, Storage storage, AppConfig config)
+    public Bridge(WebView2 web, Storage storage, AppConfig config, BackupService backups)
     {
         _web = web;
         _storage = storage;
         _config = config;
+        _backups = backups;
         _web.WebMessageReceived += OnMessage;
     }
 
@@ -112,6 +114,19 @@ public sealed class Bridge
 
         "record.get" => Wins(_storage.GetRecord(Req(p, "championKey"), Req(p, "opponentKey"), Req(p, "role"))),
 
+        // ── data safety ──────────────────────────────────────────────────
+        "backup.status" => _backups.Status(),
+
+        "backup.now" => _backups.Snapshot("manual"),
+
+        "backup.list" => _backups.List(),
+
+        "backup.restore" => Counts(_backups.Restore(Req(p, "path"))),
+
+        "data.export" => ExportPaths(DataTransfer.ExportAll(_storage)),
+
+        "data.import" => Counts(DataTransfer.ImportJson(_storage, Req(p, "path"))),
+
         // Not built yet - the UI runs on mock data until these land.
         "draft.subscribe" or "brief.request" =>
             throw new NotImplementedException($"'{method}' arrives with the LCU and Claude clients."),
@@ -120,6 +135,11 @@ public sealed class Bridge
     };
 
     private static object Wins(MatchupRecord r) => new { wins = r.Wins, losses = r.Losses };
+
+    private static object Counts(DataCounts c) => new { notes = c.Notes, games = c.Games, pool = c.Pool };
+
+    private static object ExportPaths((string Json, string Markdown) paths) =>
+        new { json = paths.Json, markdown = paths.Markdown };
 
     private static object? Run(Action a) { a(); return null; }
 

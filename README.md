@@ -54,7 +54,10 @@ src/
     Services/
       AppPaths.cs           Where everything is written (%APPDATA%\Counterpick)
       AppConfig.cs          API key, model, primary role
-      Storage.cs            SQLite: pool, notes, results, cached briefs
+      Storage.cs            SQLite: your pool, notes and results
+      BriefCache.cs         SQLite: Claude's briefs, disposable, separate file
+      BackupService.cs      Snapshots, pruning, OneDrive mirror, restore
+      DataTransfer.cs       JSON and Markdown export/import
       Bridge.cs             The single JS <-> C# seam
   Counterpick.Web/        Vite + TypeScript frontend
     src/
@@ -66,23 +69,67 @@ src/
       ui/                   chrome.ts (topbar, hero, board), views.ts, atoms.ts
       data/scenario.ts      The worked example, until live data lands
       styles.css            Ported from the prototype
+tests/
+  Counterpick.DataTests/  Data-safety checks over the real service sources
 prototype/                Design reference - the approved UI as a standalone page
 tools/                    Build and asset scripts
 ```
 
-## Storage
+## Your data
 
-Everything the app writes lives in `%APPDATA%\Counterpick`, never in the repo:
+Everything the app writes lives in `%APPDATA%\Counterpick`, never in the repo. The two
+databases are deliberately separate, because only one of them matters:
 
-| File | Holds |
-|---|---|
-| `config.json` | API key, model, primary role |
-| `counterpick.db` | Champion pool, matchup notes, results, cached briefs |
-| `cache/` | Data Dragon art and metadata, per patch. Safe to delete |
-| `webview/` | WebView2 profile |
+| File | Holds | Replaceable? |
+|---|---|---|
+| `counterpick.db` | **Your** pool, matchup notes, game results | **No. Backed up.** |
+| `cache.db` | Claude's generated briefs | Yes, for pennies. Never backed up |
+| `config.json` | API key, model, primary role | Retype it |
+| `backups/` | Timestamped snapshots of `counterpick.db` | — |
+| `exports/` | `notes.json` and `notes.md` | Regenerated on demand |
+| `cache/`, `webview/` | Data Dragon art, WebView2 profile | Safe to delete |
 
-Cached briefs are keyed by `(champion, opponent, role)` plus the newest note id for that
-matchup, so **writing a note automatically invalidates the brief that predates it**.
+Set `COUNTERPICK_DATA_DIR` to move that whole folder elsewhere (portable install, or
+test isolation).
+
+### Backups
+
+Three layers, each covering a failure the others do not:
+
+1. **Local snapshots** — taken at startup and shutdown, but only when the data actually
+   changed, so an evening of League produces one snapshot rather than thirty. The last 30
+   are kept. Snapshots taken before a schema migration or a restore are never pruned.
+2. **OneDrive mirror** — every snapshot is copied to `%OneDrive%\Counterpick`, along with
+   `notes.json` and `notes.md`. This is the layer that survives losing the disk, and
+   OneDrive adds its own file version history on top. If OneDrive is offline or paused
+   the local snapshot still succeeds and the next one retries.
+3. **Export** — `notes.json` round-trips back in; `notes.md` is readable in Notepad with
+   no software at all. This is the layer that survives abandoning the app.
+
+Two properties worth knowing:
+
+- **Snapshots use `VACUUM INTO`, not a file copy.** The database runs in WAL mode, so the
+  newest commits can sit in a `-wal` sidecar. Copying `counterpick.db` by hand can
+  silently miss them; if you ever back it up manually, take all three files.
+- **Restore merges, it never overwrites.** Restoring an old snapshot cannot destroy notes
+  written since — unique indexes on the natural identity of each row make re-importing
+  the same rows a no-op. A fresh install with an empty database pulls the OneDrive mirror
+  back automatically.
+
+A note's identity is `(champion, opponent, role, created_at, body)`. Re-importing an
+export therefore adds nothing, while writing the same lesson again three weeks later is
+kept as a genuinely new note.
+
+### Tests
+
+```
+dotnet run --project tests/Counterpick.DataTests
+```
+
+42 checks over the data-safety path: snapshots, WAL correctness, the OneDrive mirror,
+export, import idempotency, restore-without-loss, fresh-machine recovery, and the
+separation between your notes and the disposable cache. They run against an isolated
+data directory via `COUNTERPICK_DATA_DIR`.
 
 ### Why the prototype ships art inline
 

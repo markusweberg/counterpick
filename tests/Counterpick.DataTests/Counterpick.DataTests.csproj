@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Counterpick.DataTests</RootNamespace>
+    <!-- Run with: dotnet run (from this folder), or from the repo root with the
+         project flag pointing at tests/Counterpick.DataTests -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Compile the real service sources rather than referencing the app: Counterpick.App
+      targets net10.0-windows and pulls in WPF, which a console test host should not.
+      Bridge.cs is the only service that needs WebView2, so it stays out.
+    -->
+    <Compile Include="..\..\src\Counterpick.App\Services\AppPaths.cs" />
+    <Compile Include="..\..\src\Counterpick.App\Services\Storage.cs" />
+    <Compile Include="..\..\src\Counterpick.App\Services\BriefCache.cs" />
+    <Compile Include="..\..\src\Counterpick.App\Services\BackupService.cs" />
+    <Compile Include="..\..\src\Counterpick.App\Services\DataTransfer.cs" />
+  </ItemGroup>
+
+</Project>
