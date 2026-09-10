@@ -120,16 +120,31 @@ A note's identity is `(champion, opponent, role, created_at, body)`. Re-importin
 export therefore adds nothing, while writing the same lesson again three weeks later is
 kept as a genuinely new note.
 
+### The Data panel
+
+Everything above is reachable from **Data** in the top right: current counts, when the
+last backup ran, whether the OneDrive mirror is healthy, and buttons for Back up now,
+Export, Import and Open backups folder. Below that, every snapshot with a Restore
+button, and every note you have written, grouped by matchup, with inline edit and
+delete.
+
+Unlike the session views, nothing in this panel is mocked - it reads the real database,
+so it reports honestly rather than inventing figures about the safety of your notes.
+
+Deleting a note is safe: the previous snapshot still has it, and Restore brings it back.
+Destructive buttons confirm in place rather than opening a dialog.
+
 ### Tests
 
 ```
 dotnet run --project tests/Counterpick.DataTests
 ```
 
-42 checks over the data-safety path: snapshots, WAL correctness, the OneDrive mirror,
-export, import idempotency, restore-without-loss, fresh-machine recovery, and the
-separation between your notes and the disposable cache. They run against an isolated
-data directory via `COUNTERPICK_DATA_DIR`.
+58 checks over the data-safety path: snapshots, WAL correctness, the OneDrive mirror,
+export, import idempotency, restore-without-loss, fresh-machine recovery, note editing
+and deletion, and the separation between your notes and the disposable cache. They run
+against an isolated data directory via `COUNTERPICK_DATA_DIR`, and abort rather than
+touch the real profile if that redirection ever fails.
 
 ### Why the prototype ships art inline
 

@@ -77,3 +77,36 @@ export interface MatchupRecord {
   wins: number;
   losses: number;
 }
+
+/* ── data panel ──────────────────────────────────────────────────────── */
+
+/** A note as stored, including which matchup it belongs to. */
+export interface StoredNote {
+  id: number;
+  championKey: string;
+  opponentKey: string;
+  role: Role;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+  edited: boolean;
+}
+
+export interface BackupInfo {
+  path: string;
+  takenAt: string;
+  bytes: number;
+  /** "startup", "shutdown", "manual", "migration", "restore". */
+  reason: string;
+}
+
+export interface BackupStatus {
+  notes: number;
+  games: number;
+  pool: number;
+  lastBackupAt: string | null;
+  snapshotCount: number;
+  backupsDir: string;
+  mirrorDir: string | null;
+  mirrorHealthy: boolean;
+}

@@ -1,15 +1,22 @@
 import "./styles.css";
 
-import { callOr, isHosted } from "./bridge";
+import { call, callOr, isHosted } from "./bridge";
 import { initDataDragon } from "./ddragon";
-import { addNote, assignRole, laneOpponent, state } from "./state";
+import { addNote, assignRole, emptyDataState, laneOpponent, state } from "./state";
 import type { Phase, Role } from "./types";
 import { board, hero, topbar } from "./ui/chrome";
+import { dataView, loadData } from "./ui/data";
 import { afterView, briefView, draftView } from "./ui/views";
 
 const app = document.getElementById("app")!;
 
 function render(focusNote = false): void {
+  // The Data panel is about the database, not the game, so it drops the hero and board.
+  if (state.screen === "data") {
+    app.innerHTML = `<div class="app">${topbar()}<main class="wide">${dataView()}</main></div>`;
+    return;
+  }
+
   const view =
     state.phase === "draft" ? draftView() : state.phase === "locked" ? briefView() : afterView();
 
@@ -23,6 +30,34 @@ function render(focusNote = false): void {
   if (focusNote) document.getElementById("noteInput")?.focus();
 }
 
+/** Run a host call, refresh the panel, and report the outcome in one line. */
+async function dataAction(work: () => Promise<string | null>): Promise<void> {
+  const d = state.data;
+  d.confirmDelete = null;
+  d.confirmRestore = null;
+  d.editing = null;
+  try {
+    const message = await work();
+    await loadData();
+    d.flash = message;
+    d.flashError = false;
+  } catch (e) {
+    // A rejected edit or a locked file is a message, not a reason to tear the panel down.
+    d.flash = e instanceof Error ? e.message : String(e);
+    d.flashError = true;
+  }
+  render();
+}
+
+async function openData(): Promise<void> {
+  state.screen = "data";
+  state.data = emptyDataState();
+  state.data.loading = true;
+  render();
+  await loadData();
+  render();
+}
+
 /* ── events ──────────────────────────────────────────────────────────── */
 
 app.addEventListener("click", (e) => {
@@ -30,6 +65,8 @@ app.addEventListener("click", (e) => {
 
   const step = target.closest<HTMLButtonElement>(".step");
   if (step && !step.disabled) {
+    // Picking a phase from the Data panel means "take me back to the session".
+    state.screen = "session";
     state.phase = step.dataset.phase as Phase;
     return render();
   }
@@ -56,8 +93,80 @@ app.addEventListener("click", (e) => {
     return render();
   }
 
-  const action = target.closest<HTMLElement>("[data-act]")?.dataset.act;
+  const actionEl = target.closest<HTMLElement>("[data-act]");
+  const action = actionEl?.dataset.act;
   if (!action) return;
+
+  // ── data panel ──────────────────────────────────────────────────────
+  if (action === "data") { void openData(); return; }
+
+  if (state.screen === "data") {
+    const path = actionEl?.dataset.path ?? "";
+    const id = Number(actionEl?.dataset.id ?? 0);
+
+    switch (action) {
+      case "back":
+        state.screen = "session";
+        return render();
+      case "reload":
+        return void openData();
+      case "cancel":
+        state.data.confirmDelete = null;
+        state.data.confirmRestore = null;
+        state.data.editing = null;
+        return render();
+      case "backup":
+        return void dataAction(async () => {
+          await call("backup.now");
+          return "Snapshot taken and mirrored.";
+        });
+      case "export":
+        return void dataAction(async () => {
+          const paths = await call<{ json: string; markdown: string }>("data.export");
+          return `Exported notes.json and notes.md — ${paths.markdown}`;
+        });
+      case "import":
+        return void dataAction(async () => {
+          const added = await call<{ notes: number; games: number; pool: number } | null>(
+            "data.importDialog",
+          );
+          if (added === null) return null; // cancelled
+          return added.notes + added.games === 0
+            ? "Nothing new - everything in that file was already here."
+            : `Imported ${added.notes} note${added.notes === 1 ? "" : "s"} and ${added.games} game${added.games === 1 ? "" : "s"}.`;
+        });
+      case "reveal":
+        return void dataAction(async () => {
+          await call("shell.reveal", { path });
+          return null;
+        });
+      case "restore":
+        state.data.confirmRestore = path;
+        state.data.confirmDelete = null;
+        return render();
+      case "restore-go":
+        return void dataAction(async () => {
+          const added = await call<{ notes: number; games: number }>("backup.restore", { path });
+          return added.notes === 0
+            ? "Nothing to bring back - that snapshot is already fully covered."
+            : `Brought back ${added.notes} note${added.notes === 1 ? "" : "s"}.`;
+        });
+      case "edit":
+        state.data.editing = id;
+        state.data.confirmDelete = null;
+        return render();
+      case "delete":
+        state.data.confirmDelete = id;
+        state.data.confirmRestore = null;
+        return render();
+      case "delete-go":
+        return void dataAction(async () => {
+          await call("notes.delete", { id });
+          return "Note deleted. The last snapshot still has it.";
+        });
+    }
+    return;
+  }
 
   switch (action) {
     case "lock":
@@ -96,7 +205,20 @@ app.addEventListener("change", (e) => {
 });
 
 app.addEventListener("submit", (e) => {
-  const form = e.target as HTMLElement;
+  const form = e.target as HTMLFormElement;
+
+  const editId = form.dataset?.editId;
+  if (editId) {
+    e.preventDefault();
+    const body = (form.elements.namedItem("body") as HTMLTextAreaElement).value.trim();
+    if (!body) return;
+    void dataAction(async () => {
+      await call("notes.update", { id: Number(editId), body });
+      return "Note updated.";
+    });
+    return;
+  }
+
   if (form.id !== "noteForm") return;
   e.preventDefault();
 

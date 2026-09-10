@@ -21,7 +21,8 @@ const CLIENT_STATUS: Record<Phase, string> = {
 export function topbar(): string {
   const steps = STEPS.map(
     ([key, label]) =>
-      `<button class="step" data-phase="${key}" aria-current="${state.phase === key}"
+      `<button class="step" data-phase="${key}"
+        aria-current="${state.screen === "session" && state.phase === key}"
         ${key !== "draft" && !state.picked ? "disabled" : ""}>${label}</button>`,
   ).join("");
 
@@ -40,6 +41,7 @@ export function topbar(): string {
     <div class="topbar-right">
       <div class="lcu"><span class="dot"></span> League Client · ${CLIENT_STATUS[state.phase]}</div>
       ${right}
+      <button class="datalink" data-act="data" title="Notes, backups and export">Data</button>
     </div>
   </header>`;
 }

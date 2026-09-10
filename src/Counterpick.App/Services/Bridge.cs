@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Web.WebView2.Wpf;
@@ -108,6 +110,27 @@ public sealed class Bridge
         "notes.add" => _storage.AddNote(Req(p, "championKey"), Req(p, "opponentKey"),
                                         Req(p, "role"), Req(p, "body")),
 
+        "notes.all" => _storage.AllNotes().Select(n => new
+        {
+            id = n.Id,
+            championKey = n.ChampionKey,
+            opponentKey = n.OpponentKey,
+            role = n.Role,
+            body = n.Body,
+            createdAt = n.CreatedAt,
+            updatedAt = n.UpdatedAt,
+            edited = n.UpdatedAt - n.CreatedAt > TimeSpan.FromSeconds(1)
+        }),
+
+        "notes.update" => _storage.UpdateNote(Num(p, "id"), Req(p, "body"))
+            ? null
+            : throw new InvalidOperationException(
+                "That edit would duplicate another note in the same matchup."),
+
+        "notes.delete" => _storage.DeleteNote(Num(p, "id"))
+            ? null
+            : throw new InvalidOperationException("That note no longer exists."),
+
         "game.record" => Run(() => _storage.RecordGame(
             Req(p, "championKey"), Req(p, "opponentKey"), Req(p, "role"),
             p?["won"]?.GetValue<bool>() ?? false)),
@@ -127,6 +150,11 @@ public sealed class Bridge
 
         "data.import" => Counts(DataTransfer.ImportJson(_storage, Req(p, "path"))),
 
+        // The web layer cannot see real file paths, so the picker lives here.
+        "data.importDialog" => PickAndImport(),
+
+        "shell.reveal" => Run(() => Reveal(Req(p, "path"))),
+
         // Not built yet - the UI runs on mock data until these land.
         "draft.subscribe" or "brief.request" =>
             throw new NotImplementedException($"'{method}' arrives with the LCU and Claude clients."),
@@ -138,6 +166,35 @@ public sealed class Bridge
 
     private static object Counts(DataCounts c) => new { notes = c.Notes, games = c.Games, pool = c.Pool };
 
+    /// <summary>
+    /// Native open dialog, then import. Returns null when the user cancels, which the UI
+    /// treats as "nothing happened" rather than an error.
+    /// </summary>
+    private object? PickAndImport()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Import Counterpick notes",
+            Filter = "Counterpick export (*.json)|*.json|All files (*.*)|*.*",
+            InitialDirectory = Directory.Exists(AppPaths.ExportsDir) ? AppPaths.ExportsDir : null,
+            CheckFileExists = true
+        };
+
+        if (dialog.ShowDialog() != true) return null;
+        return Counts(DataTransfer.ImportJson(_storage, dialog.FileName));
+    }
+
+    /// <summary>Open a folder in Explorer, selecting the file when given one.</summary>
+    private static void Reveal(string path)
+    {
+        if (Directory.Exists(path))
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+        else if (File.Exists(path))
+            Process.Start("explorer.exe", $"/select,\"{path}\"");
+        else
+            throw new FileNotFoundException("Nothing to open there.", path);
+    }
+
     private static object ExportPaths((string Json, string Markdown) paths) =>
         new { json = paths.Json, markdown = paths.Markdown };
 
@@ -147,6 +204,9 @@ public sealed class Bridge
 
     private static string Req(JsonNode? p, string key) =>
         Str(p, key) ?? throw new ArgumentException($"Missing required field '{key}'.");
+
+    private static long Num(JsonNode? p, string key) =>
+        p?[key]?.GetValue<long>() ?? throw new ArgumentException($"Missing required field '{key}'.");
 
     private void Reply(string id, bool ok, object? result, string? error = null)
     {

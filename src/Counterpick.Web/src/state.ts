@@ -1,7 +1,30 @@
-import type { DraftState, NoteRecord, Phase, Recommendation, Role } from "./types";
+import type {
+  BackupInfo, BackupStatus, DraftState, NoteRecord, Phase, Recommendation, Role, StoredNote,
+} from "./types";
 import { INITIAL_DRAFT, RECOMMENDATIONS, SEED_NOTES, SEED_RECORDS } from "./data/scenario";
 
+/** Which screen is showing. The three phases live inside "session". */
+export type Screen = "session" | "data";
+
+/** Everything the Data panel needs. Loaded from the host, never mocked. */
+export interface DataState {
+  loading: boolean;
+  error: string | null;
+  status: BackupStatus | null;
+  snapshots: BackupInfo[];
+  notes: StoredNote[];
+  /** Note being edited inline. */
+  editing: number | null;
+  /** Second click confirms; avoids a modal dialog. */
+  confirmDelete: number | null;
+  confirmRestore: string | null;
+  flash: string | null;
+  flashError: boolean;
+}
+
 export interface AppState {
+  screen: Screen;
+  data: DataState;
   phase: Phase;
   /** The role you queue for; decides which enemy pick is your lane opponent. */
   role: Role;
@@ -18,7 +41,22 @@ export interface AppState {
   live: boolean;
 }
 
+export const emptyDataState = (): DataState => ({
+  loading: false,
+  error: null,
+  status: null,
+  snapshots: [],
+  notes: [],
+  editing: null,
+  confirmDelete: null,
+  confirmRestore: null,
+  flash: null,
+  flashError: false,
+});
+
 export const state: AppState = {
+  screen: "session",
+  data: emptyDataState(),
   phase: "draft",
   role: "Top",
   selected: RECOMMENDATIONS[0]!.championKey,

@@ -174,6 +174,51 @@ Check("cache can be wiped", cache.Count() == 0);
 Check("wiping the cache left notes untouched", storage.Counts().Notes == beforeWipe + 1,
       $"got {storage.Counts().Notes}, expected {beforeWipe + 1}");
 
+// ── 14. editing and deleting notes ───────────────────────────────────────
+Console.WriteLine("\n14. editing and deleting notes");
+var target = storage.AddNote("Jax", "Garen", "Top", "Original text.");
+Check("note created for editing", target != 0);
+
+var fpBeforeEdit = storage.Fingerprint();
+Check("edit succeeds", storage.UpdateNote(target, "Rewritten text."));
+Check("body actually changed",
+      storage.GetNotes("Jax", "Garen", "Top").Any(n => n.Body == "Rewritten text."));
+Check("original text is gone",
+      !storage.GetNotes("Jax", "Garen", "Top").Any(n => n.Body == "Original text."));
+
+// The reason updated_at exists: an edit changes neither the row count nor the highest
+// id, so without it a rewritten note would never trigger a backup.
+Check("an edit changes the backup fingerprint", storage.Fingerprint() != fpBeforeEdit,
+      "otherwise edits would go unsnapshotted");
+Check("an edit triggers a snapshot", backups.SnapshotIfChanged("test") is not null);
+
+var edited = storage.GetNotes("Jax", "Garen", "Top").First(n => n.Body == "Rewritten text.");
+Check("created date is preserved by an edit", edited.CreatedAt < edited.UpdatedAt);
+Check("editing a missing note reports failure", !storage.UpdateNote(999999, "nope"));
+
+// An edit that would collide with another note in the same matchup must be refused
+// rather than silently dropped or throwing.
+var other = storage.AddNote("Jax", "Garen", "Top", "A second note.", edited.CreatedAt);
+Check("second note added for the collision test", other != 0);
+Check("an edit that would duplicate is refused",
+      !storage.UpdateNote(other, "Rewritten text."),
+      "same matchup, same created_at, same body");
+Check("the refused edit left the note alone",
+      storage.GetNotes("Jax", "Garen", "Top").Any(n => n.Body == "A second note."));
+
+var fpBeforeDelete = storage.Fingerprint();
+var countBeforeDelete = storage.Counts().Notes;
+Check("delete succeeds", storage.DeleteNote(target));
+Check("note is gone", storage.Counts().Notes == countBeforeDelete - 1);
+Check("a delete changes the backup fingerprint", storage.Fingerprint() != fpBeforeDelete);
+Check("deleting a missing note reports failure", !storage.DeleteNote(999999));
+
+// A deleted note stays recoverable, which is what makes offering deletion safe.
+var recovered = backups.Restore(backups.List().First(b => b.Reason == "test").Path);
+Check("a deleted note can be brought back from a snapshot",
+      storage.GetNotes("Jax", "Garen", "Top").Any(n => n.Body == "Rewritten text."),
+      $"restore added {recovered.Notes} note(s)");
+
 Console.WriteLine($"\n{passed} passed, {failed} failed");
 try { Directory.Delete(sandbox, recursive: true); } catch { /* sqlite may still hold handles */ }
 return failed == 0 ? 0 : 1;

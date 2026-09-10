@@ -3,7 +3,8 @@ using Microsoft.Data.Sqlite;
 namespace Counterpick.App.Services;
 
 public sealed record PoolEntry(string ChampionKey, string Role);
-public sealed record Note(long Id, string ChampionKey, string OpponentKey, string Role, string Body, DateTimeOffset CreatedAt);
+public sealed record Note(long Id, string ChampionKey, string OpponentKey, string Role, string Body,
+                         DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
 public sealed record GameResult(string ChampionKey, string OpponentKey, string Role, bool Won, DateTimeOffset PlayedAt);
 public sealed record MatchupRecord(int Wins, int Losses);
 public sealed record DataCounts(int Notes, int Games, int Pool);
@@ -17,8 +18,9 @@ public sealed record DataCounts(int Notes, int Games, int Pool);
 /// </summary>
 public sealed class Storage
 {
-    // v1 also held a `briefs` table; v2 moves it out to cache.db.
-    private const int SchemaVersion = 2;
+    // v1 also held a `briefs` table; v2 moved it out to cache.db.
+    // v3 adds notes.updated_at, so an edit is visible to the backup fingerprint.
+    private const int SchemaVersion = 3;
 
     public string DatabaseFile { get; }
     private readonly string _connectionString;
@@ -78,7 +80,8 @@ public sealed class Storage
                 opponent_key TEXT NOT NULL,
                 role         TEXT NOT NULL,
                 body         TEXT NOT NULL,
-                created_at   TEXT NOT NULL
+                created_at   TEXT NOT NULL,
+                updated_at   TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_notes_matchup
                 ON notes (champion_key, opponent_key, role);
@@ -106,6 +109,13 @@ public sealed class Storage
         {
             // Briefs were only ever a cache; they now live in cache.db.
             cmd.CommandText = "DROP TABLE IF EXISTS briefs;";
+            cmd.ExecuteNonQuery();
+        }
+
+        if (current is 1 or 2)
+        {
+            // Nullable, so ADD COLUMN needs no default; reads coalesce to created_at.
+            cmd.CommandText = "ALTER TABLE notes ADD COLUMN updated_at TEXT;";
             cmd.ExecuteNonQuery();
         }
 
@@ -163,7 +173,8 @@ public sealed class Storage
         using var c = Open();
         using var cmd = c.CreateCommand();
         cmd.CommandText = """
-            SELECT id, champion_key, opponent_key, role, body, created_at FROM notes
+            SELECT id, champion_key, opponent_key, role, body, created_at,
+                   COALESCE(updated_at, created_at) FROM notes
             WHERE champion_key = $c AND opponent_key = $o AND role = $r
             ORDER BY created_at DESC, id DESC;
             """;
@@ -178,8 +189,9 @@ public sealed class Storage
         using var c = Open();
         using var cmd = c.CreateCommand();
         cmd.CommandText = """
-            SELECT id, champion_key, opponent_key, role, body, created_at FROM notes
-            ORDER BY role, champion_key, opponent_key, created_at DESC;
+            SELECT id, champion_key, opponent_key, role, body, created_at,
+                   COALESCE(updated_at, created_at) FROM notes
+            ORDER BY role, champion_key, opponent_key, created_at DESC, id DESC;
             """;
         return ReadNotes(cmd);
     }
@@ -190,7 +202,8 @@ public sealed class Storage
         using var r = cmd.ExecuteReader();
         while (r.Read())
             list.Add(new Note(r.GetInt64(0), r.GetString(1), r.GetString(2), r.GetString(3),
-                              r.GetString(4), DateTimeOffset.Parse(r.GetString(5))));
+                              r.GetString(4), DateTimeOffset.Parse(r.GetString(5)),
+                              DateTimeOffset.Parse(r.GetString(6))));
         return list;
     }
 
@@ -201,8 +214,8 @@ public sealed class Storage
         using var c = Open();
         using var cmd = c.CreateCommand();
         cmd.CommandText = """
-            INSERT OR IGNORE INTO notes (champion_key, opponent_key, role, body, created_at)
-            VALUES ($c, $o, $r, $b, $t);
+            INSERT OR IGNORE INTO notes (champion_key, opponent_key, role, body, created_at, updated_at)
+            VALUES ($c, $o, $r, $b, $t, $t);
             SELECT CASE WHEN changes() = 0 THEN 0 ELSE last_insert_rowid() END;
             """;
         cmd.Parameters.AddWithValue("$c", championKey);
@@ -214,6 +227,37 @@ public sealed class Storage
     }
 
     // ── results ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Rewrite a note's text, keeping its original date. Returns false if the note is
+    /// gone, or if the edit would make it identical to another note in the same matchup.
+    /// </summary>
+    public bool UpdateNote(long id, string body)
+    {
+        using var c = Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = """
+            UPDATE OR IGNORE notes SET body = $b, updated_at = $t WHERE id = $i;
+            SELECT changes();
+            """;
+        cmd.Parameters.AddWithValue("$b", body);
+        cmd.Parameters.AddWithValue("$t", DateTimeOffset.UtcNow.ToString("O"));
+        cmd.Parameters.AddWithValue("$i", id);
+        return Convert.ToInt32(cmd.ExecuteScalar()) > 0;
+    }
+
+    /// <summary>
+    /// Delete a note. Snapshots keep the old copy, so this is recoverable through the
+    /// Data panel rather than being final.
+    /// </summary>
+    public bool DeleteNote(long id)
+    {
+        using var c = Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "DELETE FROM notes WHERE id = $i; SELECT changes();";
+        cmd.Parameters.AddWithValue("$i", id);
+        return Convert.ToInt32(cmd.ExecuteScalar()) > 0;
+    }
 
     public void RecordGame(string championKey, string opponentKey, string role, bool won,
                            DateTimeOffset? playedAt = null)
@@ -288,17 +332,23 @@ public sealed class Storage
 
     /// <summary>
     /// Cheap content signature, used to skip a snapshot when nothing has changed since
-    /// the last one. Row counts plus highest ids catch every insert and delete the app
-    /// can perform.
+    /// the last one.
+    ///
+    /// Counts catch deletes and highest ids catch inserts, but an edit changes neither -
+    /// hence the newest updated_at, without which a rewritten note could go unsnapshotted.
     /// </summary>
     public string Fingerprint()
     {
         using var c = Open();
         using var cmd = c.CreateCommand();
         cmd.CommandText = """
-            SELECT (SELECT COUNT(*) FROM notes) || '.' || (SELECT COALESCE(MAX(id),0) FROM notes)
-                || '-' || (SELECT COUNT(*) FROM games) || '.' || (SELECT COALESCE(MAX(id),0) FROM games)
-                || '-' || (SELECT COUNT(*) FROM pool);
+            SELECT (SELECT COUNT(*) FROM notes)
+                || '.' || (SELECT COALESCE(MAX(id), 0) FROM notes)
+                || '.' || (SELECT COALESCE(MAX(COALESCE(updated_at, created_at)), '') FROM notes)
+                || '-' || (SELECT COUNT(*) FROM games)
+                || '.' || (SELECT COALESCE(MAX(id), 0) FROM games)
+                || '-' || (SELECT COUNT(*) FROM pool)
+                || '.' || (SELECT COALESCE(MAX(added_at), '') FROM pool);
             """;
         return Convert.ToString(cmd.ExecuteScalar()) ?? "0";
     }
@@ -339,8 +389,9 @@ public sealed class Storage
             using var tx = c.BeginTransaction();
             using var cmd = c.CreateCommand();
             cmd.CommandText = """
-                INSERT OR IGNORE INTO main.notes (champion_key, opponent_key, role, body, created_at)
-                    SELECT champion_key, opponent_key, role, body, created_at FROM incoming.notes;
+                INSERT OR IGNORE INTO main.notes (champion_key, opponent_key, role, body, created_at, updated_at)
+                    SELECT champion_key, opponent_key, role, body, created_at,
+                           COALESCE(updated_at, created_at) FROM incoming.notes;
                 INSERT OR IGNORE INTO main.games (champion_key, opponent_key, role, won, played_at)
                     SELECT champion_key, opponent_key, role, won, played_at FROM incoming.games;
                 INSERT OR IGNORE INTO main.pool (champion_key, role, added_at)
