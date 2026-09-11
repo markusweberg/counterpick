@@ -49,10 +49,23 @@ export interface AppState {
   settings: SettingsState;
   config: AppConfigView | null;
   phase: Phase;
-  /** The role you queue for; decides which enemy pick is your lane opponent. */
+  /**
+   * The role being scored; decides which enemy pick is your lane opponent. Starts as the
+   * Settings role and follows whatever the client assigns you for the length of a draft.
+   */
   role: Role;
-  /** Your champion pool for that role. */
+  /** The role the client assigned you in the current draft, if it said. */
+  assignedRole: Role | null;
+  /** The client put you in a role you did not queue for. */
+  autofilled: boolean;
+  /** Your champion pool being scored. */
   pool: string[];
+  /**
+   * Which role's pool that is. Normally `role`; when the assigned role has no pool the
+   * primary role's pool stands in, so an autofill still gets a ranked shortlist.
+   */
+  poolRole: Role;
+  poolLoading: boolean;
   /** Champion currently being considered in draft. Null until there is something to consider. */
   selected: string | null;
   /** Champion you locked in. Null until you do. */
@@ -129,7 +142,11 @@ export const state: AppState = {
   config: null,
   phase: "draft",
   role: "Top",
+  assignedRole: null,
+  autofilled: false,
   pool: example ? RECOMMENDATIONS.map((r) => r.championKey) : [],
+  poolRole: "Top",
+  poolLoading: false,
   selected: example ? RECOMMENDATIONS[0]!.championKey : null,
   picked: null,
   result: null,
@@ -220,4 +237,9 @@ export function setRole(role: Role): void {
   state.role = role;
   if (!state.live) state.draft = emptyDraft(role);
   state.settings.poolRole = role;
+}
+
+/** The pool being scored is a stand-in from another role. */
+export function poolBorrowed(): boolean {
+  return state.poolRole !== state.role;
 }

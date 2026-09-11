@@ -47,9 +47,28 @@ export async function boot(): Promise<void> {
   rerender();
 }
 
+/**
+ * Load the pool for the role being scored. An autofilled role with no pool of its own
+ * borrows the primary role's pool: a ranked list of champions you actually play beats
+ * "your pool is empty" with 27 seconds on the clock.
+ */
 export async function loadPool(): Promise<void> {
-  const rows = await callOr<{ championKey: string }[]>("pool.get", [], { role: state.role });
+  const role = state.role;
+  state.poolLoading = true;
+  const fetch = (r: Role) => callOr<{ championKey: string }[]>("pool.get", [], { role: r });
+
+  let rows = await fetch(role);
+  let from = role;
+  const primary = state.config?.primaryRole;
+  if (rows.length === 0 && primary && primary !== role) {
+    rows = await fetch(primary);
+    from = primary;
+  }
+
+  if (state.role !== role) return; // the role moved on while we waited; that load wins
   state.pool = rows.map((r) => r.championKey);
+  state.poolRole = rows.length > 0 ? from : role;
+  state.poolLoading = false;
 }
 
 export async function loadCatalog(): Promise<void> {
@@ -77,7 +96,8 @@ export function applyClientStatus(status: ClientStatus): void {
 }
 
 export function applyLiveDraft(d: LiveDraft): void {
-  if (!state.live) {
+  const fresh = !state.live;
+  if (fresh) {
     // A fresh champ select. Whatever the last game left behind is done with.
     state.live = true;
     state.phase = "draft";
@@ -89,7 +109,20 @@ export function applyLiveDraft(d: LiveDraft): void {
     state.scoring = "idle";
     state.roleSource = {};
     state.screen = "session";
+    state.assignedRole = null;
+    state.autofilled = false;
   }
+
+  // Follow the role the client gave you. Positions can swap during the draft, so this
+  // is checked on every update, but only a change from what the client last said acts,
+  // which leaves a role you set by hand in the meantime alone. When the client says
+  // nothing (blind pick, custom games) the Settings role is the default - including
+  // right after a draft that autofilled you elsewhere.
+  if (fresh || d.yourRole !== state.assignedRole) {
+    state.assignedRole = d.yourRole;
+    followRole(d.yourRole ?? state.config?.primaryRole ?? state.role);
+  }
+  state.autofilled = d.autofilled;
 
   // Enemy roles, by precedence: yours, then the client's, then Claude's last guess for
   // a champion still on the board. Anything else is unknown until the next re-score.
@@ -160,6 +193,10 @@ export function newDraft(): void {
   state.picked = null;
   state.result = null;
   if (!state.live) {
+    // The last draft's assignment is over with; back to the Settings role.
+    state.assignedRole = null;
+    state.autofilled = false;
+    followRole(state.config?.primaryRole ?? state.role);
     state.draft = emptyDraft(state.role);
     state.recommendations = [];
     state.scoredFor = null;
@@ -227,7 +264,7 @@ function scoringFingerprint(): string {
 /** Why scoring cannot run right now, or null if it can. */
 export function scoringBlocker(): "key" | "pool" | "enemy" | null {
   if (!state.config?.hasApiKey) return "key";
-  if (availablePool().length === 0) return "pool";
+  if (state.poolLoading || availablePool().length === 0) return "pool";
   if (picks("enemy").length === 0) return "enemy";
   return null;
 }
@@ -320,9 +357,27 @@ export async function ensureBrief(championKey: string, opponentKey: string, forc
 
 /* ── roles ───────────────────────────────────────────────────────────── */
 
-export async function changeRole(role: Role): Promise<void> {
+/** Score a different role from here on: its pool, its lane opponent, a fresh shortlist. */
+function followRole(role: Role): void {
+  if (role === state.role && !state.poolLoading) return;
   setRole(role);
+  state.recommendations = [];
+  state.selected = null;
+  state.scoredFor = null;
+  state.scoring = "idle";
+  void loadPool().then(() => {
+    // A swap after you locked changes which brief you need.
+    if (state.phase === "locked" && state.picked) lockIn(state.picked);
+    else scheduleRescore(0);
+    rerender();
+  });
+}
+
+/** The Settings role: the default for drafts where the client does not assign one. */
+export async function changeRole(role: Role): Promise<void> {
+  if (state.config) state.config.primaryRole = role;
   await callOr("config.setRole", null, { role });
+  setRole(role);
   await loadPool();
   state.scoredFor = null;
   scheduleRescore(0);

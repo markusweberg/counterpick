@@ -2,7 +2,7 @@
 
 import { isHosted } from "../bridge";
 import { champion } from "../champions";
-import { briefFor, laneOpponent, notesFor, state } from "../state";
+import { briefFor, laneOpponent, notesFor, poolBorrowed, state } from "../state";
 import { availablePool, scoringBlocker } from "../session";
 import type { NoteRecord, Recommendation } from "../types";
 import { esc, portrait, recordLabel, rich, VERDICT_CLASS, VERDICT_COLOR } from "./atoms";
@@ -54,6 +54,17 @@ function unscoredCard(key: string): string {
   </div>`;
 }
 
+/** "Your top pool": the role matters once the client can move you. */
+function poolLabel(): string {
+  return `Your ${state.poolRole.toLowerCase()} pool`;
+}
+
+/** When the pool on the board is a stand-in, say so before anything else. */
+function borrowedNote(): string {
+  if (!poolBorrowed()) return "";
+  return `No ${state.role.toLowerCase()} pool yet, so your ${state.poolRole.toLowerCase()} pool is ranked for ${state.role.toLowerCase()} instead. `;
+}
+
 function subnote(): string {
   const foe = laneOpponent();
   const d = state.draft;
@@ -67,7 +78,7 @@ function subnote(): string {
   const tail = hidden > 0
     ? ` ${hidden === 1 ? "Their last pick is" : `${hidden} enemy picks are`} still hidden.`
     : "";
-  return `Scored on ${parts.join(", ")}.${tail}`;
+  return `${borrowedNote()}Scored on ${parts.join(", ")}.${tail}`;
 }
 
 function notice(title: string, body: string, action = ""): string {
@@ -96,10 +107,18 @@ export function draftView(): string {
       "Recommendations and briefs come from Claude, and there is no key yet. It is stored on this machine only.",
       `<button class="ghost" data-act="settings">Open settings</button>`);
   } else if (blocker === "pool") {
-    body = state.pool.length === 0
-      ? notice(`Your ${state.role.toLowerCase()} pool is empty`,
-          "Add the champions you actually play and they will be ranked against every draft.",
-          `<button class="ghost" data-act="settings">Build your pool</button>`)
+    const lane = state.role.toLowerCase();
+    body = state.poolLoading
+      ? notice(`Loading your ${lane} pool<span class="ellipsis"></span>`, "")
+      : state.pool.length === 0
+      ? state.autofilled && state.config
+        ? notice(`Autofilled to ${lane}, and there is no ${lane} pool`,
+            `Neither your ${lane} pool nor your ${state.config.primaryRole.toLowerCase()} pool has anything in it.
+             Add a couple of champions you can stand in with; they are ranked against every draft.`,
+            `<button class="ghost" data-act="settings">Build your ${lane} pool</button>`)
+        : notice(`Your ${lane} pool is empty`,
+            "Add the champions you actually play and they will be ranked against every draft.",
+            `<button class="ghost" data-act="settings">Build your pool</button>`)
       : notice("Nothing left to pick",
           `Every champion in your pool is banned or already taken. Your pool: ${state.pool.map((k) => esc(champion(k).name)).join(", ")}.`);
   } else if (blocker === "enemy") {
@@ -110,8 +129,8 @@ export function draftView(): string {
         ? "Open a champ select in the League client and the draft appears here."
         : "Start the League client and the draft appears here as it happens.";
     body = `<div class="bar"><div>
-        <p class="eyebrow">Your pool · waiting for enemy picks</p>
-        <p class="subnote">${waiting} The client does not say who plays where; the shortlist works that out, and you can correct it on the board.</p>
+        <p class="eyebrow">${poolLabel()} · waiting for enemy picks</p>
+        <p class="subnote">${borrowedNote()}${waiting} The client does not say who plays where; the shortlist works that out, and you can correct it on the board.</p>
       </div></div>
       <div class="recs">${cards}</div>`;
   } else if (state.scoring === "error") {
@@ -120,7 +139,7 @@ export function draftView(): string {
   } else if (state.recommendations.length === 0) {
     const cards = availablePool().map(unscoredCard).join("");
     body = `<div class="bar"><div>
-        <p class="eyebrow">Your pool · scoring<span class="ellipsis"></span></p>
+        <p class="eyebrow">${poolLabel()} · scoring<span class="ellipsis"></span></p>
         <p class="subnote">${subnote()}</p>
       </div></div>
       <div class="recs">${cards}</div>`;
@@ -130,7 +149,7 @@ export function draftView(): string {
     const selected = state.selected ?? state.recommendations[0]!.championKey;
     body = `<div class="bar">
         <div>
-          <p class="eyebrow">Your pool · ranked against this draft${busy}</p>
+          <p class="eyebrow">${poolLabel()} · ranked against this draft${busy}</p>
           <p class="subnote">${subnote()}</p>
         </div>
         <div class="bar-cta">

@@ -29,7 +29,14 @@ public sealed record DraftPayload(
     string? LockedKey,
     string? HoverKey,
     /// <summary>How many enemy picks are still to come. Drives "their last pick is still hidden".</summary>
-    int EnemyPicksRemaining);
+    int EnemyPicksRemaining,
+    /// <summary>
+    /// The role the client assigned you, or null when it did not (blind pick, custom games).
+    /// The UI scores this role for the draft instead of the one under Settings.
+    /// </summary>
+    string? YourRole,
+    /// <summary>The client put you somewhere other than the positions you queued for.</summary>
+    bool Autofilled);
 
 /// <summary>
 /// Turns a <c>/lol-champ-select/v1/session</c> payload into a <see cref="DraftPayload"/>.
@@ -103,6 +110,7 @@ public static class DraftMapper
             if (slot.ChampionKey is not null && !slot.Hovering && slot.RoleKnown) enemyRoles[slot.ChampionKey] = slot.Role;
 
         var me = ally.FirstOrDefault(s => s.IsYou);
+        var meMember = myTeam.FirstOrDefault(m => (m?["cellId"]?.GetValue<int>() ?? -1) == localCell);
         var timer = session["timer"];
 
         // Enemy picks remaining: count their pending actions when they have actions, and
@@ -124,7 +132,9 @@ public static class DraftMapper
             YourTurn: inProgress.Contains(localCell),
             LockedKey: me is { Hovering: false } ? me.ChampionKey : null,
             HoverKey: me is { Hovering: true } ? me.ChampionKey : null,
-            EnemyPicksRemaining: enemyRemaining);
+            EnemyPicksRemaining: enemyRemaining,
+            YourRole: me is { RoleKnown: true } ? me.Role : null,
+            Autofilled: meMember?["isAutofilled"]?.GetValue<bool>() ?? false);
     }
 
     private static List<DraftSlot> MapTeam(JsonArray team, ChampionCatalog catalog, int localCell,

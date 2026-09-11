@@ -108,9 +108,11 @@ export function settingsView(): string {
     <div class="two">
       <section class="sect"><h3>Your role</h3>
         <select class="field" data-setting="primaryRole">
-          ${ROLES.map((r) => `<option ${state.role === r ? "selected" : ""}>${r}</option>`).join("")}
+          ${ROLES.map((r) => `<option ${(c?.primaryRole ?? state.role) === r ? "selected" : ""}>${r}</option>`).join("")}
         </select>
-        <p class="subnote" style="margin-top:8px">Decides which enemy pick counts as your lane opponent, and which pool is scored.</p>
+        <p class="subnote" style="margin-top:8px">The default. In a draft the app follows the role the client assigns you,
+          autofill included, and falls back to this pool when that role has none.
+          ${state.live && state.assignedRole ? `Right now the client has you on ${state.assignedRole.toLowerCase()}${state.autofilled ? " (autofilled)" : ""}.` : ""}</p>
       </section>
       <section class="sect"><h3>Models</h3>
         <div class="setting-row"><span class="k">Pick-phase shortlist</span>${modelSelect("shortlistModel", c?.shortlistModel ?? "claude-sonnet-5")}</div>

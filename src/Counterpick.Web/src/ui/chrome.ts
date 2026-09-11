@@ -4,7 +4,7 @@ import { ROLES, type Phase } from "../types";
 import { champion } from "../champions";
 import { isHosted } from "../bridge";
 import { splashUrl } from "../ddragon";
-import { heroChampion, laneOpponent, recommendationFor, state } from "../state";
+import { heroChampion, laneOpponent, poolBorrowed, recommendationFor, state } from "../state";
 import { timerRemaining } from "../session";
 import { clock, esc, portrait } from "./atoms";
 
@@ -103,15 +103,26 @@ export function hero(): string {
          background-position:${champion(foeKey).splashPos}"></div>`
     : `<div class="hero-side foe" style="background:linear-gradient(120deg,#1A1013,#0B1119)"></div>`;
 
+  // Where the role came from is the one thing worth shouting about: an autofill means
+  // the board is scoring a lane you did not queue for.
+  const autofilled = state.autofilled && state.assignedRole === state.role;
+  const roleText = autofilled
+    ? `<span class="autofill">Autofilled to ${state.role}</span>`
+    : state.assignedRole === state.role ? state.role : `${state.role} · default`;
+  const autofillFlag = autofilled && state.phase === "draft"
+    ? `<div class="h-flag autofill">Autofilled · ${state.role}${poolBorrowed() ? ` · ${state.poolRole} pool` : ""}</div>`
+    : "";
+
   return `<div class="hero">
     ${meSide}
     ${foeSide}
     <div class="hero-scrim"></div>
     <div class="hero-seam"></div>
     <div class="h-flag ${flagClass}">${flagText}</div>
+    ${autofillFlag}
     <div class="hero-txt">
       <div>
-        <span class="h-cls">${me ? esc(me.klass) : "Your pool"} · ${state.picked ? "Your champion" : "Your pick"}</span>
+        <span class="h-cls">${me ? esc(me.klass) : "Your pool"} · ${roleText} · ${state.picked ? "Your champion" : "Your pick"}</span>
         <h2 class="h-name">${me ? esc(me.name) : "Undecided"}</h2>
       </div>
       <div class="h-mid">

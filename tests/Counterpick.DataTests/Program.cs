@@ -441,6 +441,7 @@ if (before is not null)
     Check("your pick is in progress", before.YourTurn && before.Ally[0].OnTheClock);
     Check("90 s custom clock, not infinite", before is { TimerMs: 90000, TimerInfinite: false, TimerPhase: "BAN_PICK" });
     Check("no bans", before.Bans.Count == 0);
+    Check("no assigned position means no role to follow", before is { YourRole: null, Autofilled: false });
 }
 
 var hovering = Fixture("session-custom-hover.json");
@@ -455,6 +456,23 @@ Check("after locking, the hero seat shows the champion", lockedIn?.Ally[0].Champ
 // A normal draft (queue 400), captured 2026-09-11. Your team has assigned positions; the
 // enemy side has none at all, so their roles are unknown until inferred. Ten bans, all
 // in the actions and none in the summary object.
+// The same draft with the client putting you somewhere you did not queue for.
+var autofilled = System.Text.Json.Nodes.JsonNode.Parse(
+    File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "fixtures", "session-normal-midpick.json")))!;
+foreach (var m in autofilled["myTeam"]!.AsArray())
+    if (m!["cellId"]!.GetValue<int>() == autofilled["localPlayerCellId"]!.GetValue<int>())
+    {
+        m["assignedPosition"] = "utility";
+        m["isAutofilled"] = true;
+    }
+foreach (var m in autofilled["myTeam"]!.AsArray())
+    if (m!["assignedPosition"]!.GetValue<string>() == "utility" && !m["isAutofilled"]!.GetValue<bool>())
+        m["assignedPosition"] = "top";
+var autofilledDraft = DraftMapper.Map(autofilled, catalog);
+Check("an autofill reports the role the client gave you, flagged",
+      autofilledDraft is { YourRole: "Support", Autofilled: true },
+      $"got {autofilledDraft?.YourRole} autofilled={autofilledDraft?.Autofilled}");
+
 var normalMid = Fixture("session-normal-midpick.json");
 Check("normal draft maps", normalMid is not null);
 if (normalMid is not null)
@@ -464,6 +482,8 @@ if (normalMid is not null)
           string.Join(",", normalMid.Ally.Select(s => $"{s.Role}{(s.RoleKnown ? "" : "?")}")));
     Check("enemy roles are unknown, so none land in enemyRoles",
           normalMid.Enemy.All(s => !s.RoleKnown) && normalMid.EnemyRoles.Count == 0);
+    Check("your assigned role is reported for the app to follow",
+          normalMid is { YourRole: "Top", Autofilled: false });
     Check("enemy seats still get five distinct placeholder roles",
           normalMid.Enemy.Select(s => s.Role).Distinct().Count() == 5);
     Check("a locked enemy shows as locked", normalMid.Enemy[0] is { ChampionKey: "Diana", Hovering: false });

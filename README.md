@@ -145,7 +145,7 @@ Destructive buttons confirm in place rather than opening a dialog.
 dotnet run --project tests/Counterpick.DataTests
 ```
 
-85 checks: the data-safety path (snapshots, WAL correctness, the OneDrive mirror,
+115 checks: the data-safety path (snapshots, WAL correctness, the OneDrive mirror,
 export, import idempotency, restore-without-loss, fresh-machine recovery, note editing
 and deletion, the separation between your notes and the disposable cache) plus the pure
 half of the League client listener (endpoint parsing, the champion catalog, and the
@@ -190,22 +190,26 @@ champion pool per role.
 The League client listener has been validated in a custom game and a real normal draft;
 captured payloads from both are test fixtures. The Claude calls are wired up but have
 not yet succeeded against a real key. The next priorities, in order, are in
-**[docs/REMAINING-WORK.md](docs/REMAINING-WORK.md)**: follow the role the client assigns
-you, have the app work out the enemy laner on its own, and a UI overhaul (the pool
-editor, the window chrome, the icon, and a design pass on the newer screens).
+**[docs/REMAINING-WORK.md](docs/REMAINING-WORK.md)**: have the app work out the enemy
+laner on its own, and a UI overhaul (the pool editor, the window chrome, the icon, and a
+design pass on the newer screens).
 
 ### How a game flows through it
 
 1. **Client comes up.** The watcher polls for `LeagueClientUx.exe`, reads the port and
    password off its command line, connects, and follows the gameflow phase in the topbar.
-2. **Champ select.** Every session update is mapped onto the board. Hovers are shown;
-   only locks change the lane opponent. When your lane opponent locks, the pool is sent
-   to Claude for a ranked shortlist, and the briefs for the top two come down in the
-   background.
+2. **Champ select.** The role the client assigned you is read off your seat, and the
+   draft is scored for that role: its pool, its lane opponent. Autofill is announced in
+   the hero banner, and an autofilled role with no pool of its own borrows the pool of
+   the role under Settings. Every session update is mapped onto the board. Hovers are
+   shown; only locks change the lane opponent. When your lane opponent locks, the pool
+   is sent to Claude for a ranked shortlist, and the briefs for the top two come down
+   in the background.
 3. **You lock.** The brief view opens. Cached briefs are instant; a new one takes a few
    seconds and lands on the loading screen.
 4. **Game ends.** The client's post-game phase moves the app to the after-game view.
    Win or loss, one line of notes, and the next brief for that matchup includes it.
 
-If the client has the roles wrong, the dropdowns on the enemy board override it for the
-rest of that draft.
+If the client has the enemy roles wrong, the dropdowns on the enemy board override it
+for the rest of that draft. The role under Settings is only the default, for queues
+where the client assigns nothing: blind pick and custom games.

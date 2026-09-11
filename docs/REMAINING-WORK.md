@@ -19,8 +19,9 @@ detail needed to pick each piece up cold.
 | **Live draft from the League client** | Done, validated in a custom game and a real normal draft |
 | **Recommendations and briefs from Claude** | **Built; no successful call yet** (the key needs a workspace id, now a setting) |
 | Settings: API key, workspace id, role, models, pool editor | Done, pool editor reported broken in the app |
+| **Following the role the client assigns you** | Done 2026-09-11, tested against the fixtures; not yet seen in a live autofill |
 | Trace log under `%APPDATA%\Counterpick\logs` | Done: events, mapped drafts, Claude timings, raw payloads |
-| Tests | 112 checks, including real captured payloads |
+| Tests | 115 checks, including real captured payloads |
 
 The worked example in `src/Counterpick.Web/src/data/scenario.ts` now only appears in a
 plain browser (`npm run dev` outside the app). Inside the app everything starts empty and
@@ -69,28 +70,29 @@ Settings field. Every trace line for the draft itself was clean.
 
 Noted by Markus on 2026-09-11 after using the app in a real draft. In order.
 
-### 1. Detect the role you were assigned, and use it
+### 1. Detect the role you were assigned, and use it - done
 
-The app scores whichever role is set under Settings. In a real draft the client tells
-us the role: your own `myTeam` entry carries `assignedPosition` (captured as `top` in
-the fixtures), and `isAutofilled` says whether it is your primary. When autofill puts
-you somewhere else, today's build scores the wrong lane with the wrong pool until you
-change the role by hand - which nobody does inside a 27-second timer.
+Built 2026-09-11, the session after it was noted. How it works now:
 
-What to build:
+- `DraftPayload` carries `YourRole` (your seat's `assignedPosition`, null when the
+  client set none) and `Autofilled` (`isAutofilled` on your `myTeam` entry).
+- `applyLiveDraft` in `session.ts` follows `yourRole` for the length of a draft: it
+  switches `state.role`, loads that role's pool and re-scores. It acts on a fresh draft
+  and on any later change (position swaps), never on a repeat of what the client last
+  said, so a role you set by hand mid-draft is left alone. When the client says nothing
+  the Settings role is the default, and a fresh draft always re-reads it - a blind pick
+  after an autofilled game does not inherit the autofill. A role change after you have
+  locked re-requests the brief.
+- An assigned role with no pool of its own borrows the Settings role's pool
+  (`state.poolRole` says which pool is on the board). The draft view says so in the
+  eyebrow and the subnote, and the hero banner carries an "Autofilled · Support" flag.
+  Only when both pools are empty does the "build your pool" notice show.
+- The Settings role dropdown now edits the default only, and says which role the client
+  currently has you on.
 
-- The mapper already has your seat's role (`Ally` slot with `IsYou`, `RoleKnown`).
-  Expose it on `DraftPayload` as `YourRole`, plus `Autofilled`.
-- When a draft starts, `applyLiveDraft` in `session.ts` sets `state.role` from
-  `YourRole` when it is known, loads that role's pool, and scores against it. The
-  Settings role stays the default for when the client says nothing (blind pick,
-  custom games), and the hero banner should say "Autofilled to Support" so it is
-  obvious what happened.
-- Storage and the Settings pool editor already handle all five roles; there is one
-  pool per role. Make sure every role you can get autofilled into has at least a
-  couple of champions, or the draft view will show "your pool is empty" at the worst
-  moment. Consider a "fallback pool" or a prompt to fill the missing role from
-  Settings.
+Not yet seen live: an actual autofill. The `Autofilled: true` path is only exercised by
+a mutated fixture in the tests. First real autofill, check that the hero flag appears,
+the right pool loads, and the shortlist lands.
 
 ### 2. The app finds the enemy laner - never the player
 
@@ -147,8 +149,9 @@ is organisation-level), queue a normal draft, and watch the trace log in
 - Scoring fires once per settled change, not per event: there is a 1.2 s debounce and
   a failed call is not retried until the inputs change or you press "Try again".
 - Locking starts the brief; the brief view fills in during the loading screen.
-- Autofill: if the client puts you in a role other than your configured one, the
-  board scores the wrong lane until you change role under Settings (see gaps below).
+- Autofill: the client's assigned role is followed. Check the hero flag, the pool that
+  loads (the assigned role's, or the Settings role's as a stand-in) and that the lane
+  opponent is read for the assigned role.
 
 Where to look if something is wrong:
 
@@ -220,8 +223,9 @@ outcome, and a refusal surfaces as a readable error in the UI rather than a blan
   `callOr`. Fine while it is best-effort.
 - **No delete for a game result**, only for notes.
 - **The Data panel does not show win/loss per matchup**, though the Markdown export does.
-- **Only the configured role is scored.** See priority 1 above: the client reports
-  your assigned position, and the app should follow it.
+- **Ally roles are read but a swap on your own seat after locking re-keys the brief.**
+  Deliberate: the brief is for the lane you will actually play. The shortlist you
+  locked from was for the old role, which is unavoidable.
 - **Hover does not re-score.** Deliberate: hovers are noisy and each score is an API
   call. Your own hover is shown in the hero and the board.
 
@@ -244,7 +248,7 @@ outcome, and a refusal surfaces as a readable error in the UI rather than a blan
 ```
 dotnet build                                    # builds C# and the frontend
 dotnet run --project src/Counterpick.App        # launch
-dotnet run --project tests/Counterpick.DataTests # 85 checks
+dotnet run --project tests/Counterpick.DataTests # 115 checks
 ```
 
 For UI work with hot reload, run `npm run dev` in `src/Counterpick.Web` and start a Debug

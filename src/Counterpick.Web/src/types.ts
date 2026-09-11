@@ -115,6 +115,10 @@ export interface LiveDraft {
   lockedKey: string | null;
   hoverKey: string | null;
   enemyPicksRemaining: number;
+  /** The role the client assigned you, or null when it did not (blind pick, custom games). */
+  yourRole: Role | null;
+  /** The client put you somewhere other than the positions you queued for. */
+  autofilled: boolean;
 }
 
 /** The `client.status` payload. `phase` is the gameflow phase verbatim, or "Offline". */

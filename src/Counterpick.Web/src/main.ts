@@ -6,7 +6,8 @@ import {
   addNote, assignRole, emptyDataState, emptySettingsState, laneOpponent, state,
 } from "./state";
 import {
-  bindRender, boot, changeRole, ensureBrief, lockIn, newDraft, reloadConfig, rescore, timerRemaining,
+  bindRender, boot, changeRole, ensureBrief, loadPool, lockIn, newDraft, reloadConfig, rescore,
+  timerRemaining,
 } from "./session";
 import type { Phase, Role } from "./types";
 import { clock } from "./ui/atoms";
@@ -116,8 +117,9 @@ async function savePoolDraft(): Promise<void> {
   const role = state.settings.poolRole;
   const championKeys = state.settings.poolDraft;
   await callOr("pool.set", null, { role, championKeys });
-  if (role === state.role) {
-    state.pool = [...championKeys];
+  // The pool on the board may be this role's own or borrowed from the primary role.
+  if (role === state.role || role === state.poolRole) {
+    await loadPool();
     state.scoredFor = null;
     void rescore();
   }
