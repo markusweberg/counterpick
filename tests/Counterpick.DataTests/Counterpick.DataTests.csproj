@@ -29,11 +29,17 @@
     <Compile Include="..\..\src\Counterpick.App\Services\ChampionCatalog.cs" />
     <Compile Include="..\..\src\Counterpick.App\Services\Lcu\LcuEndpoint.cs" />
     <Compile Include="..\..\src\Counterpick.App\Services\Lcu\DraftMapper.cs" />
+    <Compile Include="..\..\src\Counterpick.App\Services\Lcu\LiveGame.cs" />
+    <!-- Enemy role inference: the play-rate table and the pure placement. -->
+    <Compile Include="..\..\src\Counterpick.App\Services\RoleRates.cs" />
+    <Compile Include="..\..\src\Counterpick.App\Services\RoleInference.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <!-- Champ select payloads captured from a live client, identifiers scrubbed. -->
     <None Include="fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The bundled play-rate snapshot, so the inference is tested on the real table. -->
+    <None Include="..\..\src\Counterpick.App\Resources\championrates.json" Link="fixtures\championrates.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

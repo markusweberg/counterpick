@@ -19,6 +19,15 @@
     <PackageReference Include="System.Management" Version="10.0.12" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!--
+      A snapshot of the champion play-rate feed (Meraki Analytics championrates.json), so
+      enemy roles can be inferred on a first run with no network. The live feed is
+      fetched and cached by Services/RoleRates.cs; refresh this copy now and then.
+    -->
+    <EmbeddedResource Include="Resources\championrates.json" />
+  </ItemGroup>
+
   <!--
     Frontend build.
 

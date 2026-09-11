@@ -5,7 +5,11 @@ using Anthropic.Models.Messages;
 namespace Counterpick.App.Services;
 
 /// <summary>A champion already on the board, with the role it is believed to play.</summary>
-public sealed record PickInfo(string ChampionKey, string Name, string Role);
+/// <param name="Guessed">
+/// The role is the app's inference from play rates and not yet settled. False when the
+/// client, the player or the running game fixed it.
+/// </param>
+public sealed record PickInfo(string ChampionKey, string Name, string Role, bool Guessed = false);
 
 /// <summary>The draft as the model should see it.</summary>
 public sealed record DraftContext(
@@ -28,15 +32,8 @@ public sealed record Candidate(
 /// <summary>Mirrors Recommendation in types.ts, minus the brief, which is a separate call.</summary>
 public sealed record ShortlistEntry(string ChampionKey, int Score, string Verdict, string Why, List<string> Hints);
 
-/// <summary>
-/// The shortlist plus the model's reading of the enemy side. In a normal draft the client
-/// never says which enemy plays where, so the roles come from the same call that scores
-/// against them. Roles the client or the player already fixed are echoed back unchanged.
-/// </summary>
-public sealed record ShortlistResult(
-    List<ShortlistEntry> Recommendations,
-    string? LaneOpponent,
-    Dictionary<string, string> EnemyRoles);
+/// <summary>The ranked pool. Enemy roles are the app's business (see RoleInference), not the model's.</summary>
+public sealed record ShortlistResult(List<ShortlistEntry> Recommendations);
 
 public sealed record LaneBeat(string Mark, string Text);
 public sealed record SetupDto(string Keystone, string Secondary, string Summoners, string First);
@@ -121,33 +118,8 @@ public sealed class ClaudeClient
 
         if (list.Count == 0) throw new InvalidOperationException("Claude's shortlist matched none of your pool.");
 
-        // Enemy roles: only for champions actually on the board, one champion per role,
-        // and never overriding a role that was already known going in.
-        var onBoard = draft.EnemyPicks.ToDictionary(p => p.ChampionKey, p => p.Role, StringComparer.OrdinalIgnoreCase);
-        var roles = new Dictionary<string, string>();
-        foreach (var pick in draft.EnemyPicks)
-            if (pick.Role != "?") roles[pick.ChampionKey] = pick.Role;
-        foreach (var guess in parsed.EnemyRoles)
-        {
-            var role = NormaliseRole(guess.Role);
-            if (role is null || !onBoard.ContainsKey(guess.ChampionKey)) continue;
-            if (roles.ContainsKey(guess.ChampionKey) || roles.ContainsValue(role)) continue;
-            roles[guess.ChampionKey] = role;
-        }
-
-        var lane = roles.FirstOrDefault(kv => kv.Value == draft.Role).Key;
-        return new ShortlistResult(list, string.IsNullOrEmpty(lane) ? null : lane, roles);
+        return new ShortlistResult(list);
     }
-
-    private static string? NormaliseRole(string? r) => r?.Trim().ToLowerInvariant() switch
-    {
-        "top" => "Top",
-        "jungle" or "jg" or "jng" => "Jungle",
-        "mid" or "middle" => "Mid",
-        "bot" or "bottom" or "adc" => "Bot",
-        "support" or "sup" or "utility" => "Support",
-        _ => null
-    };
 
     /// <summary>The full matchup brief for one champion into one opponent. Slow path.</summary>
     public async Task<BriefDto> BriefAsync(DraftContext draft, Candidate me, PickInfo opponent,
@@ -210,9 +182,7 @@ public sealed class ClaudeClient
         _ => "Even"
     };
 
-    private sealed record RoleGuess(string ChampionKey, string Role);
-
-    private sealed record ShortlistResponse(List<ShortlistEntry> Recommendations, List<RoleGuess> EnemyRoles);
+    private sealed record ShortlistResponse(List<ShortlistEntry> Recommendations);
 
     // ── prompts ──────────────────────────────────────────────────────────
 
@@ -231,10 +201,12 @@ public sealed class ClaudeClient
         the player's role, if known. `enemyPicksRemaining` is how many enemy champions are
         still hidden - when it is not zero, say what their remaining pick could change.
 
-        The League client does not reveal which enemy plays where. An enemy pick with role
-        "?" needs its role inferred from the champion, the current meta, and which roles
-        the other enemy picks already fill. A role that is not "?" was set by the client
-        or by the player and is fixed.
+        The League client does not reveal which enemy plays where, so the app places each
+        enemy pick from how often that champion is played in each role. An enemy pick with
+        `guessed` true is such a placement and may be wrong: treat it as the working
+        assumption, and if the rest of their picks make another arrangement clearly more
+        likely, say so in one clause. A pick with `guessed` false was fixed by the client,
+        the player or the running game. A role of "?" is not placed yet.
         """;
 
     private const string ShortlistSystem = Persona + """
@@ -250,11 +222,9 @@ public sealed class ClaudeClient
 
         Include every champion in `pool` exactly once, using its `championKey` verbatim.
 
-        `enemyRoles`: one entry per enemy pick whose role is "?", giving the role that
-        champion is most likely playing given the rest of their team. Each of the five
-        roles can be used once across the enemy side. Score the pool against the enemy in
-        the player's role once you have decided who that is; if no enemy pick fits the
-        player's role yet, score on the team fit and say so in `why`.
+        Score against `laneOpponent` when it is given. When it is null nobody on the enemy
+        side has been placed in the player's role yet: score on the team fit and on what
+        the hidden picks could be, and say so in `why`.
         """;
 
     private const string BriefSystem = Persona + """
@@ -286,20 +256,8 @@ public sealed class ClaudeClient
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["enemyRoles", "recommendations"],
+          "required": ["recommendations"],
           "properties": {
-            "enemyRoles": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": ["championKey", "role"],
-                "properties": {
-                  "championKey": { "type": "string" },
-                  "role": { "type": "string", "enum": ["Top", "Jungle", "Mid", "Bot", "Support"] }
-                }
-              }
-            },
             "recommendations": {
               "type": "array",
               "items": {

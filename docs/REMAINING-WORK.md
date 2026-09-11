@@ -1,9 +1,9 @@
 # Remaining work
 
 Written 2026-09-11, at the end of the session that built the League client listener,
-the Claude client and the settings screen. This replaces the 2026-09-10 handover: the
-three pieces it listed as unbuilt are now built. What follows is what is left, and the
-detail needed to pick each piece up cold.
+the Claude client and the settings screen; updated later the same day by the session
+that built enemy-role inference. What follows is what is left, and the detail needed
+to pick each piece up cold.
 
 ---
 
@@ -20,8 +20,9 @@ detail needed to pick each piece up cold.
 | **Recommendations and briefs from Claude** | **Built; no successful call yet** (the key needs a workspace id, now a setting) |
 | Settings: API key, workspace id, role, models, pool editor | Done, pool editor reported broken in the app |
 | **Following the role the client assigns you** | Done 2026-09-11, tested against the fixtures; not yet seen in a live autofill |
+| **Enemy roles from play rates, confirmed by the running game** | Done 2026-09-11, tested against the captured draft; not yet seen live |
 | Trace log under `%APPDATA%\Counterpick\logs` | Done: events, mapped drafts, Claude timings, raw payloads |
-| Tests | 115 checks, including real captured payloads |
+| Tests | 143 checks, including real captured payloads and the play-rate snapshot |
 
 The worked example in `src/Counterpick.Web/src/data/scenario.ts` now only appears in a
 plain browser (`npm run dev` outside the app). Inside the app everything starts empty and
@@ -50,10 +51,10 @@ position swaps on the allied side, the clock resetting per action, your turn, th
 Two captures are in the fixtures. What it showed that the custom game could not:
 
 - **The enemy side never has `assignedPosition`** in a normal draft; only your own team
-  does. Seat order is pick order, not lanes. So enemy roles are now inferred by the
-  shortlist call - Claude returns `enemyRoles` alongside the ranking - and shown on the
-  board as a guess you can overrule. The mapper marks each slot `RoleKnown`, and
-  `enemyRoles` in the payload only carries roles the client actually set.
+  does. Seat order is pick order, not lanes. Enemy roles are now placed locally from
+  play rates (see priority 2 below) and shown on the board as a guess you can overrule.
+  The mapper marks each slot `RoleKnown`, and `enemyRoles` in the payload only carries
+  roles the client actually set.
 - `bans` in the session summary object can be empty while the ban actions are all
   there; both are read.
 - There is a `ten_bans_reveal` action type; ignored.
@@ -66,7 +67,7 @@ Settings field. Every trace line for the draft itself was clean.
 
 ---
 
-## Priorities after the first real draft  ← start here
+## Priorities after the first real draft
 
 Noted by Markus on 2026-09-11 after using the app in a real draft. In order.
 
@@ -94,29 +95,97 @@ Not yet seen live: an actual autofill. The `Autofilled: true` path is only exerc
 a mutated fixture in the tests. First real autofill, check that the hero flag appears,
 the right pool loads, and the shortlist lands.
 
-### 2. The app finds the enemy laner - never the player
+### 2. The app finds the enemy laner - never the player - done
 
 The client does not say who on the enemy side plays where (confirmed: their
 `assignedPosition` is always empty in a normal draft). The role dropdowns on the enemy
 board exist as a correction, not as the way to tell the app who you are laning
 against. The player should never have to touch them for the app to work.
 
-The current build infers roles through the shortlist call (Claude returns
-`enemyRoles`, applied to the board as guesses), but this has not yet run with a
-working key, so treat it as unverified. Things to check and improve:
+Built 2026-09-11. Decided with Markus: popularity data, not a Claude call, so there is
+no delay - and the running game confirms the roles before the brief is trusted. How it
+works now:
 
-- The first enemy lock, alone, may be ambiguous (Diana can be jungle or mid). The
-  inference should get more confident with each pick, and a guess must be revised
-  when a later pick makes it wrong - which is why Claude-sourced roles are re-asked
-  on every re-score rather than frozen.
-- The cost of being wrong is a brief about the wrong matchup. If confidence is low,
-  the draft view should say "probably X in top" rather than state it as fact, and
-  the brief prefetch should wait until the lane is settled.
-- If Claude's guessing turns out weak or slow, the fallback is a small local table of
-  champion-to-role likelihoods (e.g. from Data Dragon tags plus a hand list of the
-  common flex picks) used before the call, with Claude only breaking ties.
+- **The table.** `Services/RoleRates.cs` loads Meraki Analytics' `championrates.json`
+  (per champion, the share of games in each position; derived from Riot match data,
+  refreshed every patch). Fetched at most once a day, cached under
+  `cache\roles\`, and a snapshot is embedded in the exe
+  (`Resources/championrates.json`) so a first run offline still works. Refresh the
+  snapshot now and then by overwriting it with the feed. The feed zeroes anything
+  under about 0.35%, so unreported off-roles get a floor.
 
-### 3. UI overhaul
+  **The feed looks stale.** On 2026-09-11 it reported patch 16.3 with a Last-Modified
+  of 2026-02-11, while Data Dragon was on 16.18.1. Role distributions move slowly, so
+  it still places a draft correctly (the captured one included), but reworks and meta
+  shifts since February are not in it and champions released after it fall back to
+  their Data Dragon classes. Watch the Settings screen, which shows both patch labels.
+  If the feed stays dead, two ways out, both behind the one loader class: hand-edit
+  the snapshot (it is plain JSON, one object per champion), or add a once-per-patch
+  Claude call that produces the same shape - that keeps the zero-delay draft-time
+  placement and confines the model to a background refresh.
+- **The placement.** `Services/RoleInference.cs`, pure. Every arrangement of the
+  locked enemy champions into distinct roles is weighted by the product of their play
+  rates; the best arrangement goes on the board; the share of total weight in which a
+  champion sits in its shown role is its confidence. One pick alone is just its own
+  rates (Diana: jungle 0.75); the next picks pin it down (Diana next to Kha'Zix: mid
+  0.84). A guess an early pick got wrong is revised by a later one because the whole
+  side is re-placed on every pick. Roles the client, the player or the game fixed are
+  honoured; the rest are placed around them. A melee champion gets a twentieth of the
+  floor for bot - that is what separates "Nunu jungle, Diana mid, Veigar bot" from
+  "Diana jungle, Veigar mid, Nunu bot" when the feed reports neither bot rate; the
+  ranged flag comes from Data Dragon's attack range. Champions the feed does not know
+  yet (a new release) fall back to their Data Dragon classes.
+- **The bridge.** `roles.infer` takes the locked enemies with any fixed roles and
+  returns roles plus confidence. `session.ts` calls it on every draft update and every
+  dropdown change (`inferRoles`), then re-scores or briefs as the new roles call for.
+  The trace prints `[roles] inferred [Diana:Mid@0.65 ...]` each time.
+- **Saying "probably".** `LANE_SETTLED` in `state.ts` is 0.85. Below it the hero
+  banner says "Probably your lane opponent", the subnote says "probably the Diana
+  lane", the dropdown shows a dashed border and a `?` after the role, and the tooltip
+  carries the percentage. Above it the board states the role as fact, with the
+  percentage in the tooltip.
+- **The brief waits.** After you lock, the brief is requested only if the lane is
+  settled (fixed by you or the client, or confidence at or above `LANE_SETTLED`).
+  Otherwise the brief view says so and offers "Write it now". The shortlist prefetch
+  of the top two briefs also waits for a settled lane.
+- **The game confirms.** When the gameflow phase reaches `GameStart` or `InProgress`,
+  `LcuWatcher` polls the Live Client Data API (`https://127.0.0.1:2999/liveclientdata/
+  allgamedata`, served by the game process, self-signed, no auth) every two seconds for
+  up to five minutes. The player list carries a `position` for all ten players.
+  `Lcu/LiveGame.cs` maps it (`rawChampionName` is the Data Dragon key, "Nunu & Willump"
+  falls back to the display name); the watcher emits `game.roles`; `applyGameRoles` in
+  `session.ts` marks those roles as source "game" (which beats everything, your own
+  corrections included) and requests the brief for the confirmed lane. Positions are
+  empty in modes without them; then nothing is emitted and the guess stands.
+- Claude no longer guesses roles. The shortlist prompt and schema lost `enemyRoles`;
+  each enemy pick now carries `guessed` so the model knows which placements are firm.
+
+Not yet seen live, in order of what to check in the trace log:
+
+1. `[roles] play rates ready: feed, patch 16.3` at startup (or `cache`; `bundled`
+   means the feed was unreachable - the URL is in `RoleRates.cs`). Seen once on
+   2026-09-11 with the client open: catalog, feed and websocket all came up within
+   two seconds of launch.
+2. `[roles] inferred [...]` after each enemy lock, with sensible roles and a confidence
+   that rises as their side fills in.
+3. `[game] positions confirmed: enemy[...]` shortly after the loading screen starts.
+   **Unverified assumption:** that the Live Client Data API answers during the loading
+   screen rather than only once the game clock runs. If it only answers in game, the
+   confirmed brief lands a minute later than hoped; the mitigation is already in place
+   (a settled guess is briefed on at lock, and the confirmation only re-requests when
+   it disagrees). If the poll never confirms, the first thing to check is whether the
+   `allPlayers` entries carry `riotId` or only `summonerName`; the mapper matches
+   either against `activePlayer`. Save a real `allgamedata` capture into the fixtures
+   in place of `allgamedata-synthetic.json`, which is hand-written from the docs.
+4. The dropdown correction: change a role by hand and the rest are re-placed around
+   it on the next `[roles] inferred` line, and the shortlist re-scores.
+
+Tuning knobs, all constants: `RoleInference.Floor` (0.05), `MeleeBotFactor` (0.05),
+the class priors in `RoleInference.TagPriors`, and `LANE_SETTLED` (0.85). The test
+section "roles. placement" in `Program.cs` pins the captured draft's answer
+(Nunu jungle, Diana mid 0.65, Yone top 0.89, Thresh support 0.97, Veigar bot 0.79).
+
+### 3. UI overhaul  ← start here (1 and 2 are done)
 
 The web UI was ported from the prototype and then extended feature by feature; it
 needs a proper pass. Reported:
@@ -144,8 +213,10 @@ is organisation-level), queue a normal draft, and watch the trace log in
 `%APPDATA%\Counterpick\logs`. The things to confirm:
 
 - The shortlist lands inside the pick timer. The trace prints its duration and tokens.
-- The inferred enemy roles are sensible, and the lane opponent in the hero banner is
-  the right champion. Correct one on the board and the next re-score keeps it.
+- The placed enemy roles are sensible (`[roles] inferred` in the trace), and the lane
+  opponent in the hero banner is the right champion. Correct one on the board and the
+  rest are re-placed around it. Once the loading screen starts, `[game] positions
+  confirmed` should follow and the banner should say "confirmed".
 - Scoring fires once per settled change, not per event: there is a 1.2 s debounce and
   a failed call is not retried until the inputs change or you press "Try again".
 - Locking starts the brief; the brief view fills in during the loading screen.
@@ -248,7 +319,7 @@ outcome, and a refusal surfaces as a readable error in the UI rather than a blan
 ```
 dotnet build                                    # builds C# and the frontend
 dotnet run --project src/Counterpick.App        # launch
-dotnet run --project tests/Counterpick.DataTests # 115 checks
+dotnet run --project tests/Counterpick.DataTests # 143 checks
 ```
 
 For UI work with hot reload, run `npm run dev` in `src/Counterpick.Web` and start a Debug
@@ -265,14 +336,18 @@ the reference for anything the live app should look like.
 
 | File | Does |
 |---|---|
-| `Services/ChampionCatalog.cs` | Data Dragon champion list, numeric id ↔ key, cached per patch |
+| `Services/ChampionCatalog.cs` | Data Dragon champion list, numeric id ↔ key, classes, ranged flag, cached per patch |
+| `Services/RoleRates.cs` | Per-position play rates (Meraki feed), cached daily, bundled snapshot as fallback |
+| `Services/RoleInference.cs` | Places the enemy side into roles with a confidence; pure and tested |
+| `Services/Lcu/LiveGame.cs` | Live Client Data API: positions for all ten players once the game loads |
+| `Resources/championrates.json` | The bundled play-rate snapshot, refreshed by hand |
 | `Services/Lcu/LcuEndpoint.cs` | Port and password parsing from the command line or lockfile |
 | `Services/Lcu/LcuLocator.cs` | Finds the running client (WMI, then lockfile fallbacks) |
 | `Services/Lcu/LcuClient.cs` | HTTPS and WebSocket to one client instance |
 | `Services/Lcu/DraftMapper.cs` | Session payload → `DraftPayload`, pure and tested |
 | `Services/Lcu/LcuWatcher.cs` | Poll, connect, reconnect with backoff, emit events |
 | `Services/ClaudeClient.cs` | Shortlist and brief calls, prompts, JSON schemas |
-| `Services/Bridge.cs` | Async dispatch; `draft.subscribe`, `recs.request`, `brief.request`, `champions.list`, `config.set` |
-| `Web/src/session.ts` | Live draft handling, when to score, brief prefetch, phase transitions |
+| `Services/Bridge.cs` | Async dispatch; `draft.subscribe`, `roles.infer`, `recs.request`, `brief.request`, `champions.list`, `config.set` |
+| `Web/src/session.ts` | Live draft handling, enemy-role placement, when to score, when the brief is safe to write, phase transitions |
 | `Web/src/champions.ts` | Champion lookup backed by the catalog |
 | `Web/src/ui/settings.ts` | The settings screen |

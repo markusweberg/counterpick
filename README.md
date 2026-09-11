@@ -1,9 +1,15 @@
 # Counterpick
 
 A personal League of Legends champ select companion. It reads the draft live from the
-League client, ranks your champion pool against what the enemy has picked, and — once
-you lock in — writes a matchup brief you read on the loading screen. After the game you
-add a note, and that note feeds into every future brief for the same matchup.
+League client, works out who on the enemy side plays where, ranks your champion pool
+against what they have picked, and — once you lock in — writes a matchup brief you read
+on the loading screen. After the game you add a note, and that note feeds into every
+future brief for the same matchup.
+
+The client never says which enemy plays which role, so the app places them from how
+often each champion is played in each position (a public play-rate table, refreshed
+per patch), says "probably" until it is sure, and lets the running game confirm before
+the brief is trusted.
 
 Single-user, local-first. There is no server and no account.
 
@@ -59,9 +65,13 @@ src/
       BackupService.cs      Snapshots, pruning, OneDrive mirror, restore
       DataTransfer.cs       JSON and Markdown export/import
       ChampionCatalog.cs    Data Dragon champion list, numeric id <-> key
+      RoleRates.cs          Per-position play rates, cached daily, with a bundled snapshot
+      RoleInference.cs      Places the enemy side into roles, with a confidence
       ClaudeClient.cs       The shortlist and brief calls, prompts and schemas
       Bridge.cs             The single JS <-> C# seam
-      Lcu/                  League client listener: locator, client, mapper, watcher
+      Lcu/                  League client listener: locator, client, mapper, watcher,
+                            and the running game's player list for confirmed positions
+    Resources/              The bundled play-rate snapshot
   Counterpick.Web/        Vite + TypeScript frontend
     src/
       main.ts               Entry: render loop and event delegation

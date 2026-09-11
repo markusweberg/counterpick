@@ -1,0 +1,21 @@
+{
+  "_note": "Hand-written from Riot's Live Client Data documentation, not captured. Replace with a real /liveclientdata/allgamedata capture (identifiers scrubbed) the first time one is taken.",
+  "activePlayer": {
+    "riotId": "You#EUW",
+    "summonerName": "You",
+    "level": 1
+  },
+  "allPlayers": [
+    { "championName": "Garen", "rawChampionName": "game_character_displayname_Garen", "position": "TOP", "team": "ORDER", "riotId": "You#EUW", "summonerName": "You" },
+    { "championName": "Wukong", "rawChampionName": "game_character_displayname_MonkeyKing", "position": "JUNGLE", "team": "ORDER", "riotId": "Ally1#EUW", "summonerName": "Ally1" },
+    { "championName": "Hwei", "rawChampionName": "game_character_displayname_Hwei", "position": "MIDDLE", "team": "ORDER", "riotId": "Ally2#EUW", "summonerName": "Ally2" },
+    { "championName": "Brand", "rawChampionName": "game_character_displayname_Brand", "position": "BOTTOM", "team": "ORDER", "riotId": "Ally3#EUW", "summonerName": "Ally3" },
+    { "championName": "Lulu", "rawChampionName": "game_character_displayname_Lulu", "position": "UTILITY", "team": "ORDER", "riotId": "Ally4#EUW", "summonerName": "Ally4" },
+    { "championName": "Yone", "rawChampionName": "game_character_displayname_Yone", "position": "TOP", "team": "CHAOS", "riotId": "Foe1#EUW", "summonerName": "Foe1" },
+    { "championName": "Nunu & Willump", "position": "JUNGLE", "team": "CHAOS", "riotId": "Foe2#EUW", "summonerName": "Foe2" },
+    { "championName": "Diana", "rawChampionName": "game_character_displayname_Diana", "position": "MIDDLE", "team": "CHAOS", "riotId": "Foe3#EUW", "summonerName": "Foe3" },
+    { "championName": "Veigar", "rawChampionName": "game_character_displayname_Veigar", "position": "BOTTOM", "team": "CHAOS", "riotId": "Foe4#EUW", "summonerName": "Foe4" },
+    { "championName": "Thresh", "rawChampionName": "game_character_displayname_Thresh", "position": "UTILITY", "team": "CHAOS", "riotId": "Foe5#EUW", "summonerName": "Foe5" }
+  ],
+  "gameData": { "gameMode": "CLASSIC", "gameTime": 0 }
+}

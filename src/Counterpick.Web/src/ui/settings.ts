@@ -131,5 +131,6 @@ export function settingsView(): string {
         : `<div class="actions"><button class="mini" data-act="clear-briefs">Clear cached briefs</button></div>`}
     </section>
 
-    <p class="subnote" style="margin-top:28px">Data Dragon ${esc(c?.dataDragonVersion ?? "version not resolved yet")}.</p>`;
+    <p class="subnote" style="margin-top:28px">Data Dragon ${esc(c?.dataDragonVersion ?? "version not resolved yet")}.
+      Enemy roles are placed from play rates for patch ${esc(c?.roleRatesPatch ?? "?")}${c?.roleRatesSource === "bundled" ? " (the bundled snapshot; the feed was unreachable)" : ""}.</p>`;
 }

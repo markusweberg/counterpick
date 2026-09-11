@@ -4,7 +4,9 @@ import { ROLES, type Phase } from "../types";
 import { champion } from "../champions";
 import { isHosted } from "../bridge";
 import { splashUrl } from "../ddragon";
-import { heroChampion, laneOpponent, poolBorrowed, recommendationFor, state } from "../state";
+import {
+  heroChampion, LANE_SETTLED, laneConfidence, laneOpponent, poolBorrowed, recommendationFor, roleFixed, state,
+} from "../state";
 import { timerRemaining } from "../session";
 import { clock, esc, portrait } from "./atoms";
 
@@ -129,11 +131,26 @@ export function hero(): string {
         <span class="h-score">${rec?.score ?? "—"}</span><span class="h-scorel">Fit</span>
       </div>
       <div class="h-foe">
-        <span class="h-cls">${foeKey ? esc(champion(foeKey).klass) : "Unassigned"} · Lane opponent</span>
+        <span class="h-cls">${foeKey ? `${esc(champion(foeKey).klass)} · ${foeLabel()}` : "Unassigned · Lane opponent"}</span>
         <h2 class="h-name">${foeKey ? esc(champion(foeKey).name) : "Unknown"}</h2>
       </div>
     </div>
   </div>`;
+}
+
+/**
+ * How sure the app is that this is your lane opponent. A placement from play rates is
+ * said to be a guess until it is sure enough, or until the game confirms it.
+ */
+function foeLabel(): string {
+  const foe = laneOpponent();
+  if (!foe) return "Lane opponent";
+  if (state.roleSource[foe] === "game") return "Lane opponent · confirmed";
+  const pct = Math.round(laneConfidence() * 100);
+  if (roleFixed(foe) || laneConfidence() >= LANE_SETTLED) {
+    return roleFixed(foe) ? "Lane opponent" : `<span title="${pct}% from play rates">Lane opponent</span>`;
+  }
+  return `<span class="probable" title="${pct}% from play rates. Confirmed when the game starts.">Probably your lane opponent</span>`;
 }
 
 export function board(): string {
@@ -174,15 +191,22 @@ export function board(): string {
       }
       const isLane = key === foe;
       const assigned = state.draft.enemyRoles[key];
-      const guessed = state.roleSource[key] === "claude";
+      const source = state.roleSource[key];
+      const pct = Math.round((state.roleConfidence[key] ?? 0) * 100);
+      const shaky = source === "inferred" && pct < LANE_SETTLED * 100;
+      const title =
+        source === "game" ? "Confirmed by the game."
+        : source === "inferred" ? `Placed from play rates: ${pct}% likely. Change it if you know better.`
+        : assigned ? ""
+        : "The client does not say. Set it, or wait for the next pick to place it.";
       const options = [
         assigned ? "" : `<option value="" selected>Role?</option>`,
-        ...ROLES.map((r) => `<option ${assigned === r ? "selected" : ""}>${r}</option>`),
+        ...ROLES.map((r) => `<option ${assigned === r ? "selected" : ""}>${r}${assigned === r && shaky ? "?" : ""}</option>`),
       ].join("");
       return `<div class="slot ${isLane ? "lane" : ""}">${portrait(key)}
         <span class="nm">${esc(champion(key).name)}</span>
-        <select class="rolesel ${isLane ? "is-lane" : ""} ${assigned ? "" : "unknown"}" data-champ="${key}"
-          title="${guessed ? "Claude's guess. Change it if you know better." : assigned ? "" : "The client does not say. Set it, or wait for the shortlist to work it out."}"
+        <select class="rolesel ${isLane ? "is-lane" : ""} ${assigned ? "" : "unknown"} ${shaky ? "guess" : ""}" data-champ="${key}"
+          title="${title}"
           aria-label="${esc(champion(key).name)} role">${options}</select></div>`;
     })
     .join("");

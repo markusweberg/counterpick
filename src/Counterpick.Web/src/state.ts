@@ -73,10 +73,12 @@ export interface AppState {
   result: "win" | "loss" | null;
   draft: DraftState;
   /**
-   * Where each entry in draft.enemyRoles came from. Your own choices win over the client,
-   * the client wins over Claude, and Claude's guesses are re-asked on every re-score.
+   * Where each entry in draft.enemyRoles came from. The game wins over everything, then
+   * your own choices, then the client; inferred roles are re-placed on every pick.
    */
   roleSource: Record<string, RoleSource>;
+  /** How sure the placement is, 0-1, per enemy champion. 1 for anything fixed. */
+  roleConfidence: Record<string, number>;
   recommendations: Recommendation[];
   scoring: ScoringStatus;
   scoringError: string | null;
@@ -152,6 +154,7 @@ export const state: AppState = {
   result: null,
   draft: example ? structuredClone(INITIAL_DRAFT) : emptyDraft("Top"),
   roleSource: example ? { Darius: "client", Nidalee: "client" } : {},
+  roleConfidence: {},
   recommendations: example ? RECOMMENDATIONS : [],
   scoring: "idle",
   scoringError: null,
@@ -173,6 +176,31 @@ export const state: AppState = {
 export function laneOpponent(): string | null {
   const found = Object.entries(state.draft.enemyRoles).find(([, r]) => r === state.role);
   return found ? found[0] : null;
+}
+
+/**
+ * How sure a placement has to be before it is treated as settled: stated as fact on
+ * the board and briefed on before the game confirms it. Below this the draft view says
+ * "probably" and the brief waits for the game.
+ */
+export const LANE_SETTLED = 0.85;
+
+/** Whether a champion's role on the board is fixed by something other than the play rates. */
+export function roleFixed(championKey: string): boolean {
+  const source = state.roleSource[championKey];
+  return source === "user" || source === "client" || source === "game";
+}
+
+/** How sure the app is about the lane opponent, 0-1. Zero when there is none. */
+export function laneConfidence(): number {
+  const foe = laneOpponent();
+  if (!foe) return 0;
+  return roleFixed(foe) ? 1 : (state.roleConfidence[foe] ?? 0);
+}
+
+/** The lane opponent is known well enough to write a brief about. */
+export function laneSettled(): boolean {
+  return laneOpponent() !== null && laneConfidence() >= LANE_SETTLED;
 }
 
 export function recommendationFor(championKey: string): Recommendation | undefined {
@@ -223,13 +251,17 @@ export function assignRole(championKey: string, role: Role): void {
   if (clash && previous) {
     state.draft.enemyRoles[clash] = previous;
     state.roleSource[clash] = "user";
+    state.roleConfidence[clash] = 1;
   } else if (clash) {
-    // The other champion's role was a guess and you just took it; leave them unassigned.
+    // The other champion's role was a guess and you just took it; the next placement
+    // finds them a new one.
     delete state.draft.enemyRoles[clash];
     delete state.roleSource[clash];
+    delete state.roleConfidence[clash];
   }
   state.draft.enemyRoles[championKey] = role;
   state.roleSource[championKey] = "user";
+  state.roleConfidence[championKey] = 1;
 }
 
 /** Changing your role moves your seat on an empty board and re-reads the lane opponent. */

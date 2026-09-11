@@ -6,10 +6,12 @@
 
 import { call, callOr, isHosted, on } from "./bridge";
 import { setCatalog } from "./champions";
-import { laneOpponent, noteKey, setRole, state, emptyDraft } from "./state";
+import {
+  assignRole, emptyDraft, LANE_SETTLED, laneOpponent, laneSettled, noteKey, roleFixed, setRole, state,
+} from "./state";
 import type {
-  AppConfigView, Brief, CatalogChampion, ClientStatus, DraftSummary, LiveDraft, NoteRecord, PickRef,
-  Role, ShortlistResponse,
+  AppConfigView, Brief, CatalogChampion, ClientStatus, DraftSummary, GameRoles, LiveDraft, NoteRecord,
+  PickRef, Role, RoleInference, ShortlistResponse,
 } from "./types";
 
 let rerender: () => void = () => {};
@@ -35,6 +37,7 @@ export async function boot(): Promise<void> {
   on("client.status", (p) => applyClientStatus(p as ClientStatus));
   on("draft.changed", (p) => applyLiveDraft(p as LiveDraft));
   on("draft.ended", () => endLiveDraft());
+  on("game.roles", (p) => applyGameRoles(p as GameRoles));
 
   // The watcher may have been running for a while; catch up on its current view.
   const snapshot = await callOr<{ status: ClientStatus; draft: LiveDraft | null } | null>(
@@ -108,6 +111,7 @@ export function applyLiveDraft(d: LiveDraft): void {
     state.scoredFor = null;
     state.scoring = "idle";
     state.roleSource = {};
+    state.roleConfidence = {};
     state.screen = "session";
     state.assignedRole = null;
     state.autofilled = false;
@@ -124,22 +128,26 @@ export function applyLiveDraft(d: LiveDraft): void {
   }
   state.autofilled = d.autofilled;
 
-  // Enemy roles, by precedence: yours, then the client's, then Claude's last guess for
-  // a champion still on the board. Anything else is unknown until the next re-score.
+  // Enemy roles, by precedence: the game's, yours, the client's, then the last placement
+  // for a champion still on the board - kept so the board does not blink while the new
+  // placement is worked out below.
   const locked = new Set(d.enemy.filter((s) => s.championKey && !s.hovering).map((s) => s.championKey!));
   const roles: Record<string, Role> = {};
   const sources: typeof state.roleSource = {};
+  const confidence: typeof state.roleConfidence = {};
   for (const [key, role] of Object.entries(state.draft.enemyRoles)) {
     const source = state.roleSource[key];
-    if (locked.has(key) && (source === "user" || source === "claude")) {
+    if (locked.has(key) && source && source !== "client") {
       roles[key] = role;
       sources[key] = source;
+      confidence[key] = state.roleConfidence[key] ?? 0;
     }
   }
   for (const [key, role] of Object.entries(d.enemyRoles)) {
-    if (sources[key] === "user") continue;
+    if (sources[key] === "user" || sources[key] === "game") continue;
     roles[key] = role;
     sources[key] = "client";
+    confidence[key] = 1;
   }
   state.draft = {
     ally: d.ally,
@@ -149,6 +157,7 @@ export function applyLiveDraft(d: LiveDraft): void {
     enemyPicksRemaining: d.enemyPicksRemaining,
   };
   state.roleSource = sources;
+  state.roleConfidence = confidence;
 
   state.timerMs = d.timerMs;
   state.timerAt = Date.now();
@@ -157,12 +166,80 @@ export function applyLiveDraft(d: LiveDraft): void {
   state.yourTurn = d.yourTurn;
   state.hoverKey = d.hoverKey;
 
-  if (d.lockedKey && state.phase === "draft") {
-    lockIn(d.lockedKey);
-  } else {
-    scheduleRescore();
-  }
+  if (d.lockedKey && state.phase === "draft") lockIn(d.lockedKey);
+  // Place the enemy side afresh; that ends in a re-score, or in the brief once locked.
+  void inferRoles();
   rerender();
+}
+
+/* ── enemy roles ─────────────────────────────────────────────────────── */
+
+let inferSeq = 0;
+
+/**
+ * Place every locked enemy champion from play rates, honouring the roles the game, you
+ * or the client already fixed. Local and instant, so it runs on every pick; the answer
+ * gets surer as the enemy side fills in, and a guess an earlier pick got wrong is
+ * revised by a later one. Ends in whatever the new roles call for: a re-score during
+ * the draft, the brief once you have locked.
+ */
+async function inferRoles(rescoreDelayMs = 1200): Promise<void> {
+  const seq = ++inferSeq;
+  const enemies = state.draft.enemy
+    .filter((s) => s.championKey && !s.hovering)
+    .map((s) => {
+      const key = s.championKey!;
+      return roleFixed(key) ? { championKey: key, role: state.draft.enemyRoles[key] } : { championKey: key };
+    });
+
+  if (enemies.length > 0 && isHosted) {
+    try {
+      const res = await call<RoleInference>("roles.infer", { enemies });
+      if (seq !== inferSeq) return; // a newer draft came in while we waited
+      for (const [key, role] of Object.entries(res.roles)) {
+        if (roleFixed(key)) continue;
+        state.draft.enemyRoles[key] = role;
+        state.roleSource[key] = "inferred";
+        state.roleConfidence[key] = res.confidence[key] ?? 0;
+      }
+    } catch (e) {
+      // No table at all. The board keeps "Role?" and the dropdown still works.
+      console.warn("roles.infer failed", e);
+      if (seq !== inferSeq) return;
+    }
+  }
+  afterRolesChanged(rescoreDelayMs);
+}
+
+/** The roles moved; whatever depends on them is redone. */
+function afterRolesChanged(rescoreDelayMs = 1200): void {
+  if (state.phase === "locked" && state.picked) briefIfSettled(state.picked);
+  else if (state.phase === "draft") scheduleRescore(rescoreDelayMs);
+  rerender();
+}
+
+/** You set a role on the board. It is fixed from here; the rest are placed around it. */
+export function userAssignedRole(championKey: string, role: Role): void {
+  assignRole(championKey, role);
+  void inferRoles(0);
+}
+
+/**
+ * The running game says who plays where. This is the truth: it replaces every guess,
+ * and if it moves the lane opponent, the brief is written for the right one.
+ */
+export function applyGameRoles(g: GameRoles): void {
+  const onBoard = new Set(state.draft.enemy.filter((s) => s.championKey && !s.hovering).map((s) => s.championKey!));
+  let applied = 0;
+  for (const [key, role] of Object.entries(g.enemyRoles)) {
+    if (!onBoard.has(key)) continue;
+    state.draft.enemyRoles[key] = role;
+    state.roleSource[key] = "game";
+    state.roleConfidence[key] = 1;
+    applied++;
+  }
+  // A game the board knows nothing about (the app opened mid-game) changes nothing.
+  if (applied > 0) afterRolesChanged();
 }
 
 export function endLiveDraft(): void {
@@ -179,12 +256,21 @@ export function lockIn(championKey: string): void {
   state.picked = championKey;
   state.selected = championKey;
   state.phase = "locked";
-  const foe = laneOpponent();
-  if (foe && isHosted) {
-    void ensureBrief(championKey, foe);
-    void loadNotes(championKey, foe);
-  }
+  if (isHosted) briefIfSettled(championKey);
   rerender();
+}
+
+/**
+ * Load the notes for the lane, and write the brief once the lane is settled. A brief
+ * about the wrong matchup is worse than a late one, so an unsure placement waits for
+ * the game to confirm who is where; that arrives on the loading screen, which is when
+ * the brief is read anyway. A sure one is written straight away.
+ */
+function briefIfSettled(championKey: string): void {
+  const foe = laneOpponent();
+  if (!foe) return;
+  void loadNotes(championKey, foe);
+  if (laneSettled()) void ensureBrief(championKey, foe);
 }
 
 /** Back to an empty draft, by hand. The client does the same thing on its own. */
@@ -202,6 +288,7 @@ export function newDraft(): void {
     state.scoredFor = null;
     state.selected = null;
     state.roleSource = {};
+    state.roleConfidence = {};
   }
   rerender();
 }
@@ -219,22 +306,29 @@ export async function loadNotes(championKey: string, opponentKey: string): Promi
 
 /* ── scoring ─────────────────────────────────────────────────────────── */
 
-/** Locked picks on one side. Enemy roles are "?" where nobody has settled them yet. */
+/** A placement too unsure to state as fact; the model is told so. */
+function guessed(championKey: string): boolean {
+  return !roleFixed(championKey) && (state.roleConfidence[championKey] ?? 0) < LANE_SETTLED;
+}
+
+/** Locked picks on one side. Enemy roles are "?" where nobody has placed them yet. */
 function picks(side: "ally" | "enemy"): PickRef[] {
   return state.draft[side]
     .filter((s) => s.championKey && !s.hovering && !s.isYou)
-    .map((s) => ({
-      championKey: s.championKey!,
-      role: side === "enemy"
-        ? (state.draft.enemyRoles[s.championKey!] ?? ("?" as Role))
-        : s.role,
-    }));
+    .map((s) => {
+      const key = s.championKey!;
+      if (side === "ally") return { championKey: key, role: s.role };
+      const role = state.draft.enemyRoles[key];
+      return role
+        ? { championKey: key, role, guessed: guessed(key) }
+        : { championKey: key, role: "?" as Role };
+    });
 }
 
 export function draftSummary(): DraftSummary {
   const foe = laneOpponent();
   return {
-    laneOpponent: foe ? { championKey: foe, role: state.role } : null,
+    laneOpponent: foe ? { championKey: foe, role: state.role, guessed: guessed(foe) } : null,
     enemyPicks: picks("enemy"),
     allyPicks: picks("ally"),
     enemyPicksRemaining: state.draft.enemyPicksRemaining,
@@ -307,15 +401,6 @@ export async function rescore(force = false): Promise<void> {
 
     if (state.scoredFor !== fp) return; // a newer draft came in while we waited
 
-    // Claude's reading of the enemy side fills whatever the client and you left open.
-    for (const [key, role] of Object.entries(res.enemyRoles)) {
-      const source = state.roleSource[key];
-      if (source === "user" || source === "client") continue;
-      if (!state.draft.enemy.some((s) => s.championKey === key && !s.hovering)) continue;
-      state.draft.enemyRoles[key] = role;
-      state.roleSource[key] = "claude";
-    }
-
     state.recommendations = res.recommendations;
     state.records = res.records;
     if (!state.selected || !res.recommendations.some((r) => r.championKey === state.selected)) {
@@ -323,9 +408,10 @@ export async function rescore(force = false): Promise<void> {
     }
     state.scoring = "idle";
 
-    // Prefetch: the brief for the top candidates is probably the one you will read.
+    // Prefetch: the brief for the top candidates is probably the one you will read -
+    // but only once the lane is settled, or it is a brief about the wrong matchup.
     const foe = laneOpponent();
-    if (foe) for (const r of res.recommendations.slice(0, 2)) void ensureBrief(r.championKey, foe);
+    if (foe && laneSettled()) for (const r of res.recommendations.slice(0, 2)) void ensureBrief(r.championKey, foe);
   } catch (e) {
     if (state.scoredFor !== fp) return;
     state.scoring = "error";

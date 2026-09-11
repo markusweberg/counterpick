@@ -29,6 +29,7 @@ public sealed class Bridge
     private readonly ChampionCatalog _catalog;
     private readonly LcuWatcher _watcher;
     private readonly ClaudeClient _claude;
+    private readonly RoleRates _rates;
 
     private static readonly JsonSerializerOptions Json = new()
     {
@@ -37,7 +38,8 @@ public sealed class Bridge
     };
 
     public Bridge(WebView2 web, Storage storage, AppConfig config, BackupService backups,
-                  BriefCache briefs, ChampionCatalog catalog, LcuWatcher watcher, ClaudeClient claude)
+                  BriefCache briefs, ChampionCatalog catalog, LcuWatcher watcher, ClaudeClient claude,
+                  RoleRates rates)
     {
         _web = web;
         _storage = storage;
@@ -47,6 +49,7 @@ public sealed class Bridge
         _catalog = catalog;
         _watcher = watcher;
         _claude = claude;
+        _rates = rates;
         _web.WebMessageReceived += OnMessage;
     }
 
@@ -133,6 +136,9 @@ public sealed class Bridge
         // ── live draft ──────────────────────────────────────────────────
         "draft.subscribe" => new { status = _watcher.Status, draft = _watcher.CurrentDraft },
 
+        // ── enemy roles ─────────────────────────────────────────────────
+        "roles.infer" => InferRolesAsync(p),
+
         // ── Claude ──────────────────────────────────────────────────────
         "recs.request" => RecommendAsync(p),
 
@@ -204,7 +210,9 @@ public sealed class Bridge
         model = _config.Model,
         shortlistModel = _config.ShortlistModel,
         primaryRole = _config.PrimaryRole,
-        dataDragonVersion = _catalog.Version ?? _config.DataDragonVersion
+        dataDragonVersion = _catalog.Version ?? _config.DataDragonVersion,
+        roleRatesPatch = _rates.Patch,
+        roleRatesSource = _rates.Source
     };
 
     // ── champions ────────────────────────────────────────────────────────
@@ -227,6 +235,39 @@ public sealed class Bridge
         };
     }
 
+    // ── enemy roles ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Payload: { enemies: [{ championKey, role? }] } - the locked enemy champions, with a
+    /// role on the ones the client, the player or the game already fixed. Returns the
+    /// most likely role for each and how sure that is. Local and instant: play rates plus
+    /// one-of-each-role, no model call.
+    /// </summary>
+    private async Task<object?> InferRolesAsync(JsonNode? p)
+    {
+        await _catalog.EnsureLoadedAsync();
+        await _rates.EnsureLoadedAsync();
+
+        var picks = new List<RolePick>();
+        foreach (var n in p?["enemies"]?.AsArray() ?? [])
+        {
+            var key = Req(n, "championKey");
+            var info = _catalog.ByKey(key);
+            var weights = RoleInference.WeightsFor(info is null ? null : _rates.RatesFor(info.NumericId), info?.Tags ?? [],
+                                                   info?.Ranged ?? true);
+            picks.Add(new RolePick(info?.Key ?? key, weights, Str(n, "role")));
+        }
+
+        var guesses = RoleInference.Infer(picks);
+        Trace.Write("roles", $"inferred [{string.Join(" ", guesses.Select(g => $"{g.ChampionKey}:{g.Role}@{g.Confidence:0.00}"))}] " +
+                             $"from {_rates.Source} rates, patch {_rates.Patch ?? "?"}");
+        return new
+        {
+            roles = guesses.ToDictionary(g => g.ChampionKey, g => g.Role),
+            confidence = guesses.ToDictionary(g => g.ChampionKey, g => g.Confidence)
+        };
+    }
+
     // ── Claude ───────────────────────────────────────────────────────────
 
     /// <summary>
@@ -246,14 +287,11 @@ public sealed class Bridge
         var started = System.Diagnostics.Stopwatch.StartNew();
         var result = await _claude.ShortlistAsync(draft, pool);
         Trace.Write("claude", $"shortlist ready in {started.ElapsedMilliseconds}ms: " +
-                              $"{string.Join(" ", result.Recommendations.Select(r => $"{r.ChampionKey}={r.Score}"))}; " +
-                              $"lane={result.LaneOpponent ?? "?"} roles[{string.Join(",", result.EnemyRoles.Select(kv => $"{kv.Key}:{kv.Value}"))}]");
+                              $"{string.Join(" ", result.Recommendations.Select(r => $"{r.ChampionKey}={r.Score}"))}");
 
         return new
         {
             recommendations = result.Recommendations,
-            laneOpponent = result.LaneOpponent,
-            enemyRoles = result.EnemyRoles,
             records = pool.ToDictionary(c => c.ChampionKey, c => new { wins = c.Wins, losses = c.Losses })
         };
     }
@@ -302,15 +340,15 @@ public sealed class Bridge
 
     private DraftContext ParseDraft(JsonNode? d, string role)
     {
-        List<PickInfo> Picks(string field) =>
-            d?[field]?.AsArray()
-                .Select(n => new PickInfo(Req(n, "championKey"), NameOf(Req(n, "championKey")), Str(n, "role") ?? "?"))
-                .ToList() ?? [];
+        PickInfo Pick(JsonNode? n, string? roleOverride = null) =>
+            new(Req(n, "championKey"), NameOf(Req(n, "championKey")), roleOverride ?? Str(n, "role") ?? "?",
+                Guessed: n?["guessed"]?.GetValue<bool>() ?? false);
+        List<PickInfo> Picks(string field) => d?[field]?.AsArray().Select(n => Pick(n)).ToList() ?? [];
 
         var lane = d?["laneOpponent"];
         return new DraftContext(
             Role: role,
-            LaneOpponent: lane is null ? null : new PickInfo(Req(lane, "championKey"), NameOf(Req(lane, "championKey")), role),
+            LaneOpponent: lane is null ? null : Pick(lane, role),
             EnemyPicks: Picks("enemyPicks"),
             AllyPicks: Picks("allyPicks"),
             EnemyPicksRemaining: d?["enemyPicksRemaining"]?.GetValue<int>() ?? 0,

@@ -9,7 +9,8 @@ namespace Counterpick.App.Services;
 /// <param name="Key">Data Dragon id, e.g. "MonkeyKing". The key used everywhere in this app.</param>
 /// <param name="NumericId">Riot's numeric champion id, which is what the League client speaks.</param>
 /// <param name="Tags">Data Dragon classes, e.g. ["Fighter", "Tank"].</param>
-public sealed record ChampionInfo(string Key, string Name, int NumericId, IReadOnlyList<string> Tags);
+/// <param name="Ranged">Basic attack range of 300 or more. Melee champions all but never play bot.</param>
+public sealed record ChampionInfo(string Key, string Name, int NumericId, IReadOnlyList<string> Tags, bool Ranged = false);
 
 /// <summary>
 /// The champion list from Data Dragon, cached per patch under <see cref="AppPaths.CacheDir"/>.
@@ -133,7 +134,8 @@ public sealed class ChampionCatalog
             if (key is null || name is null || !int.TryParse(numeric, out var id)) continue;
 
             var tags = node["tags"]?.AsArray().Select(t => t!.GetValue<string>()).ToList() ?? [];
-            list.Add(new ChampionInfo(key, name, id, tags));
+            var range = node["stats"]?["attackrange"]?.GetValue<double>() ?? 0;
+            list.Add(new ChampionInfo(key, name, id, tags, Ranged: range >= 300));
         }
 
         list.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));

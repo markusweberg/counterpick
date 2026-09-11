@@ -20,11 +20,13 @@ public sealed class LcuWatcher : IDisposable
     public const string StatusEvent = "client.status";
     public const string DraftEvent = "draft.changed";
     public const string DraftEndedEvent = "draft.ended";
+    public const string GameRolesEvent = "game.roles";
 
     private readonly ChampionCatalog _catalog;
     private readonly Action<string, object?> _emit;
     private readonly CancellationTokenSource _cts = new();
     private Task? _loop;
+    private CancellationTokenSource? _gameCts;
 
     public ClientStatus Status { get; private set; } = new(false, "Offline");
     public DraftPayload? CurrentDraft { get; private set; }
@@ -63,6 +65,7 @@ public sealed class LcuWatcher : IDisposable
                 using var client = new LcuClient(endpoint);
                 var phase = await client.GetGameflowPhaseAsync(ct);
                 SetStatus(new ClientStatus(true, phase));
+                SyncGamePoll(phase);
 
                 // Catch up on a draft already in progress before events start flowing.
                 if (phase == "ChampSelect")
@@ -103,6 +106,7 @@ public sealed class LcuWatcher : IDisposable
                 Trace.Write("lcu", $"gameflow {evt.EventType}: {phase}");
                 SetStatus(new ClientStatus(true, phase));
                 if (phase != "ChampSelect" && CurrentDraft is not null) EndDraft();
+                SyncGamePoll(phase);
                 break;
 
             case LcuClient.ChampSelectUri:
@@ -137,6 +141,66 @@ public sealed class LcuWatcher : IDisposable
                $" ally[{string.Join(" ", d.Ally.Select(Seat))}] enemy[{string.Join(" ", d.Enemy.Select(Seat))}]" +
                $" bans[{string.Join(",", d.Bans)}] remaining={d.EnemyPicksRemaining}" +
                $" yourTurn={d.YourTurn} locked={d.LockedKey ?? "-"} hover={d.HoverKey ?? "-"}";
+    }
+
+    /// <summary>
+    /// Start asking the game process who plays where when a game is loading, and stop
+    /// when it is over. Called from the watcher loop only, so no locking.
+    /// </summary>
+    private void SyncGamePoll(string phase)
+    {
+        var inGame = phase is "GameStart" or "InProgress";
+        if (inGame && _gameCts is null)
+        {
+            _gameCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+            _ = PollGameAsync(_gameCts.Token);
+        }
+        else if (!inGame && _gameCts is not null)
+        {
+            // Cancelled and dropped, not disposed: the poll may still be mid-await on it.
+            _gameCts.Cancel();
+            _gameCts = null;
+        }
+    }
+
+    /// <summary>
+    /// The Live Client Data API answers once the game process is up - during the loading
+    /// screen at the earliest - and carries a position for every player. One answer is all
+    /// that is needed; after five minutes without one (a mode without positions) give up.
+    /// </summary>
+    private async Task PollGameAsync(CancellationToken ct)
+    {
+        Trace.Write("game", "asking the game client for positions");
+        using var client = new LiveGameClient();
+        var deadline = DateTime.UtcNow + TimeSpan.FromMinutes(5);
+        try
+        {
+            while (!ct.IsCancellationRequested && DateTime.UtcNow < deadline)
+            {
+                var data = await client.GetAllGameDataAsync(ct);
+                var roles = data is null ? null : LiveGameMapper.Map(data, _catalog);
+                if (roles is not null)
+                {
+                    Trace.Payload("game", "allgamedata/allPlayers", data?["allPlayers"]);
+                    Trace.Write("game", $"positions confirmed: enemy[{Roles(roles.EnemyRoles)}] ally[{Roles(roles.AllyRoles)}] you={roles.YourRole ?? "?"}");
+                    _emit(GameRolesEvent, roles);
+                    return;
+                }
+                await Task.Delay(TimeSpan.FromSeconds(2), ct);
+            }
+            if (!ct.IsCancellationRequested) Trace.Write("game", "no positions from the game client; keeping the draft-time guess");
+        }
+        catch (OperationCanceledException)
+        {
+            // Game over, or the app is closing.
+        }
+        catch (Exception ex)
+        {
+            Trace.Write("game", $"position poll failed: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        static string Roles(IReadOnlyDictionary<string, string> map) =>
+            string.Join(",", map.Select(kv => $"{kv.Key}:{kv.Value}"));
     }
 
     private void EndDraft()

@@ -290,32 +290,32 @@ const string championJson = """
       "Gwen":{"id":"Gwen","key":"887","name":"Gwen","tags":["Fighter","Assassin"]},
       "Jax":{"id":"Jax","key":"24","name":"Jax","tags":["Fighter"]},
       "MonkeyKing":{"id":"MonkeyKing","key":"62","name":"Wukong","tags":["Fighter","Tank"]},
-      "Nidalee":{"id":"Nidalee","key":"76","name":"Nidalee","tags":["Assassin","Mage"]},
-      "Orianna":{"id":"Orianna","key":"61","name":"Orianna","tags":["Mage","Support"]},
+      "Nidalee":{"id":"Nidalee","key":"76","name":"Nidalee","tags":["Assassin","Mage"],"stats":{"attackrange":550}},
+      "Orianna":{"id":"Orianna","key":"61","name":"Orianna","tags":["Mage","Support"],"stats":{"attackrange":550}},
       "Sejuani":{"id":"Sejuani","key":"113","name":"Sejuani","tags":["Tank","Fighter"]},
       "Amumu":{"id":"Amumu","key":"32","name":"Amumu","tags":["Tank","Mage"]},
       "Diana":{"id":"Diana","key":"131","name":"Diana","tags":["Fighter","Mage"]},
       "Sett":{"id":"Sett","key":"875","name":"Sett","tags":["Fighter","Tank"]},
-      "Sona":{"id":"Sona","key":"37","name":"Sona","tags":["Support","Mage"]},
-      "Varus":{"id":"Varus","key":"110","name":"Varus","tags":["Marksman","Mage"]},
-      "Brand":{"id":"Brand","key":"63","name":"Brand","tags":["Mage"]},
+      "Sona":{"id":"Sona","key":"37","name":"Sona","tags":["Support","Mage"],"stats":{"attackrange":550}},
+      "Varus":{"id":"Varus","key":"110","name":"Varus","tags":["Marksman","Mage"],"stats":{"attackrange":550}},
+      "Brand":{"id":"Brand","key":"63","name":"Brand","tags":["Mage"],"stats":{"attackrange":550}},
       "Garen":{"id":"Garen","key":"86","name":"Garen","tags":["Fighter","Tank"]},
-      "Hwei":{"id":"Hwei","key":"910","name":"Hwei","tags":["Mage"]},
-      "Lulu":{"id":"Lulu","key":"147","name":"Lulu","tags":["Support","Mage"]},
+      "Hwei":{"id":"Hwei","key":"910","name":"Hwei","tags":["Mage"],"stats":{"attackrange":550}},
+      "Lulu":{"id":"Lulu","key":"147","name":"Lulu","tags":["Support","Mage"],"stats":{"attackrange":550}},
       "Nunu":{"id":"Nunu","key":"20","name":"Nunu & Willump","tags":["Tank","Fighter"]},
-      "Thresh":{"id":"Thresh","key":"412","name":"Thresh","tags":["Support","Fighter"]},
-      "Veigar":{"id":"Veigar","key":"45","name":"Veigar","tags":["Mage"]},
+      "Thresh":{"id":"Thresh","key":"412","name":"Thresh","tags":["Support","Fighter"],"stats":{"attackrange":550}},
+      "Veigar":{"id":"Veigar","key":"45","name":"Veigar","tags":["Mage"],"stats":{"attackrange":550}},
       "Warwick":{"id":"Warwick","key":"19","name":"Warwick","tags":["Fighter","Tank"]},
       "Yone":{"id":"Yone","key":"777","name":"Yone","tags":["Assassin","Fighter"]},
       "Akali":{"id":"Akali","key":"84","name":"Akali","tags":["Assassin"]},
-      "Morgana":{"id":"Morgana","key":"25","name":"Morgana","tags":["Mage","Support"]},
-      "Caitlyn":{"id":"Caitlyn","key":"51","name":"Caitlyn","tags":["Marksman"]},
+      "Morgana":{"id":"Morgana","key":"25","name":"Morgana","tags":["Mage","Support"],"stats":{"attackrange":550}},
+      "Caitlyn":{"id":"Caitlyn","key":"51","name":"Caitlyn","tags":["Marksman"],"stats":{"attackrange":550}},
       "Khazix":{"id":"Khazix","key":"121","name":"Kha'Zix","tags":["Assassin"]},
       "Tryndamere":{"id":"Tryndamere","key":"23","name":"Tryndamere","tags":["Fighter","Assassin"]},
-      "Jhin":{"id":"Jhin","key":"202","name":"Jhin","tags":["Marksman","Mage"]},
+      "Jhin":{"id":"Jhin","key":"202","name":"Jhin","tags":["Marksman","Mage"],"stats":{"attackrange":550}},
       "Singed":{"id":"Singed","key":"27","name":"Singed","tags":["Tank","Fighter"]},
       "Fizz":{"id":"Fizz","key":"105","name":"Fizz","tags":["Assassin","Fighter"]},
-      "Teemo":{"id":"Teemo","key":"17","name":"Teemo","tags":["Marksman","Assassin"]},
+      "Teemo":{"id":"Teemo","key":"17","name":"Teemo","tags":["Marksman","Assassin"],"stats":{"attackrange":550}},
       "Pyke":{"id":"Pyke","key":"555","name":"Pyke","tags":["Support","Assassin"]}
     }}
     """;
@@ -326,6 +326,8 @@ Check("display name survives", catalog.ById(62)?.Name == "Wukong");
 Check("id 0 means nothing picked", catalog.ById(0) is null);
 Check("unknown id is null, not a crash", catalog.ById(999999) is null);
 Check("key lookup is case-insensitive", catalog.ByKey("monkeyking")?.NumericId == 62);
+Check("attack range marks ranged champions; no stats means melee",
+      catalog.ByKey("Veigar")!.Ranged && catalog.ByKey("Thresh")!.Ranged && !catalog.ByKey("Diana")!.Ranged && !catalog.ByKey("Nunu")!.Ranged);
 
 // ── League client: session mapping ───────────────────────────────────────
 // The worked example's draft, as the client would describe it: blue side, you top in
@@ -499,6 +501,115 @@ Check("fully locked normal draft: nothing remaining, you locked Garen",
       normalDone is { EnemyPicksRemaining: 0, LockedKey: "Garen", YourTurn: false });
 Check("fully locked normal draft: all five enemies present and none known",
       normalDone is not null && normalDone.Enemy.All(s => s.ChampionKey is not null && !s.Hovering && !s.RoleKnown));
+
+// ── Enemy roles: play rates and placement ────────────────────────────────
+// The client never says who on the enemy side plays where. The app places each locked
+// enemy from the play-rate table (Meraki Analytics championrates.json, the bundled
+// snapshot here) plus one-of-each-role, and the running game confirms once it loads.
+Console.WriteLine("\nroles. play-rate table");
+var rates = RoleRates.FromJson(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "fixtures", "championrates.json")));
+Check("snapshot parses with a patch and the whole roster", rates.Patch is not null && rates.Count > 150,
+      $"patch {rates.Patch}, {rates.Count} champions");
+Check("Diana is mostly jungle, sometimes mid, never top",
+      rates.RatesFor(131) is { } diana && diana["Jungle"] > diana["Mid"] && diana["Mid"] > 0 && diana["Top"] == 0);
+Check("an unknown id has no rates", rates.RatesFor(999999) is null);
+Check("a broken body is refused", ((Func<bool>)(() =>
+{
+    try { RoleRates.FromJson("{}"); return false; } catch (InvalidOperationException) { return true; }
+}))());
+
+Console.WriteLine("\nroles. placement");
+RolePick Pick(string key, string? fixedRole = null)
+{
+    var info = catalog.ByKey(key) ?? throw new InvalidOperationException($"{key} is not in the test catalog");
+    return new RolePick(info.Key, RoleInference.WeightsFor(rates.RatesFor(info.NumericId), info.Tags, info.Ranged), fixedRole);
+}
+RoleGuess Of(IReadOnlyList<RoleGuess> guesses, string key) => guesses.Single(g => g.ChampionKey == key);
+string Show(IReadOnlyList<RoleGuess> guesses) => string.Join(" ", guesses.Select(g => $"{g.ChampionKey}:{g.Role}@{g.Confidence:0.00}"));
+
+Check("nothing locked, nothing placed", RoleInference.Infer([]).Count == 0);
+
+// One pick: just its own rates. Diana leans jungle but mid is live, so not certain.
+var alone = RoleInference.Infer([Pick("Diana")]);
+Check("Diana alone is jungle, but not sure", Of(alone, "Diana") is { Role: "Jungle", Confidence: > 0.6 and < 0.9 }, Show(alone));
+
+// The same Diana next to a jungler is mid, and surer than she was jungle on her own.
+var withKha = RoleInference.Infer([Pick("Diana"), Pick("Khazix")]);
+Check("Diana next to Kha'Zix moves to mid",
+      Of(withKha, "Diana") is { Role: "Mid", Confidence: > 0.7 } && Of(withKha, "Khazix").Role == "Jungle", Show(withKha));
+
+// A one-role champion is sure of itself.
+var kha = RoleInference.Infer([Pick("Khazix")]);
+Check("a one-role champion is placed with high confidence", Of(kha, "Khazix") is { Role: "Jungle", Confidence: > 0.9 }, Show(kha));
+
+// The real enemy side from the captured normal draft: Diana, Thresh, Veigar, Nunu, Yone.
+var five = RoleInference.Infer([Pick("Diana"), Pick("Thresh"), Pick("Veigar"), Pick("Nunu"), Pick("Yone")]);
+Check("five picks fill five distinct roles", five.Select(g => g.Role).Distinct().Count() == 5, Show(five));
+Check("the captured enemy side: Nunu jungle, Diana mid, Yone top, Thresh support, Veigar left for bot",
+      Of(five, "Nunu").Role == "Jungle" && Of(five, "Diana").Role == "Mid" && Of(five, "Yone").Role == "Top" &&
+      Of(five, "Thresh").Role == "Support" && Of(five, "Veigar").Role == "Bot", Show(five));
+Check("Thresh support is near certain; Veigar bot, placed by elimination, is not",
+      Of(five, "Thresh").Confidence > 0.95 && Of(five, "Veigar").Confidence < Of(five, "Thresh").Confidence, Show(five));
+Check("Yone top is settled enough to brief on (over 0.85)", Of(five, "Yone").Confidence > 0.85, Show(five));
+
+// A role you fixed by hand is kept at full confidence and the rest are placed around it.
+var fixedTop = RoleInference.Infer([Pick("Diana", "Top"), Pick("Yone"), Pick("Khazix")]);
+Check("a fixed role is honoured at confidence 1",
+      Of(fixedTop, "Diana") is { Role: "Top", Confidence: 1.0 } && Of(fixedTop, "Yone").Role == "Mid" && Of(fixedTop, "Khazix").Role == "Jungle",
+      Show(fixedTop));
+
+// Two picks fixed to the same role cannot both be honoured; best effort, no exception.
+var clash = RoleInference.Infer([Pick("Diana", "Top"), Pick("Yone", "Top")]);
+Check("contradictory fixes fall back to the rates rather than throwing",
+      clash.Count == 2 && clash.Select(g => g.Role).Distinct().Count() == 2, Show(clash));
+
+// More picks than roles is nonsense from the caller; the first five are placed.
+var six = RoleInference.Infer([Pick("Diana"), Pick("Thresh"), Pick("Veigar"), Pick("Nunu"), Pick("Yone"), Pick("Garen")]);
+Check("a sixth pick is ignored, not an error", six.Count == 5);
+
+// A champion the feed does not know yet (a new release) falls back to its classes.
+var newMarksman = RoleInference.WeightsFor(null, ["Marksman"], ranged: true);
+Check("no rates: a Marksman is placed bot from its class",
+      RoleInference.Infer([new RolePick("Brand-new", newMarksman, null)])[0] is { Role: "Bot", Confidence: > 0.5 });
+var nothingKnown = RoleInference.WeightsFor(null, [], ranged: false);
+Check("no rates and no classes: an even spread",
+      nothingKnown.Values.All(v => v == 1.0) &&
+      RoleInference.Infer([new RolePick("Mystery", nothingKnown, null)])[0].Confidence == 0.2);
+var dianaWeights = RoleInference.WeightsFor(rates.RatesFor(131), [], ranged: false);
+Check("zero rates are floored, not impossible", dianaWeights["Top"] == RoleInference.Floor);
+Check("a melee champion gets a tenth of the floor for bot",
+      dianaWeights["Bot"] == RoleInference.Floor * RoleInference.MeleeBotFactor &&
+      RoleInference.WeightsFor(rates.RatesFor(45), [], ranged: true)["Bot"] == RoleInference.Floor);
+
+// ── Live game: positions from the running game ───────────────────────────
+// The Live Client Data API carries a position for all ten players. The fixture is
+// hand-written from Riot's documentation; a real capture should replace it.
+Console.WriteLine("\ngame. positions from the running game");
+var gameJson = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "fixtures", "allgamedata-synthetic.json"));
+var game = LiveGameMapper.Map(System.Text.Json.Nodes.JsonNode.Parse(gameJson), catalog);
+Check("player list maps", game is not null);
+if (game is not null)
+{
+    Check("your team is found through the active player, and you are top",
+          game.YourRole == "Top" && game.AllyRoles.Count == 5 && game.AllyRoles["Garen"] == "Top");
+    Check("all five enemy positions come through",
+          game.EnemyRoles.Count == 5 && game.EnemyRoles["Diana"] == "Mid" && game.EnemyRoles["Yone"] == "Top" &&
+          game.EnemyRoles["Veigar"] == "Bot" && game.EnemyRoles["Thresh"] == "Support",
+          string.Join(",", game.EnemyRoles.Select(kv => $"{kv.Key}:{kv.Value}")));
+    Check("the internal name maps to the Data Dragon key (Wukong is MonkeyKing)", game.AllyRoles.ContainsKey("MonkeyKing"));
+    Check("a player without the internal name is matched by display name (Nunu & Willump)", game.EnemyRoles.ContainsKey("Nunu"));
+}
+
+var noPositions = System.Text.Json.Nodes.JsonNode.Parse(gameJson)!;
+foreach (var p in noPositions["allPlayers"]!.AsArray()) p!["position"] = "";
+Check("a mode without positions yields nothing, so the draft-time guess stands",
+      LiveGameMapper.Map(noPositions, catalog) is null);
+
+var stranger = System.Text.Json.Nodes.JsonNode.Parse(gameJson)!;
+stranger["activePlayer"]!["riotId"] = "Somebody#Else";
+stranger["activePlayer"]!["summonerName"] = "Somebody";
+Check("not finding yourself in the list yields nothing", LiveGameMapper.Map(stranger, catalog) is null);
+Check("an empty payload yields nothing", LiveGameMapper.Map(System.Text.Json.Nodes.JsonNode.Parse("{}"), catalog) is null);
 
 Console.WriteLine($"\n{passed} passed, {failed} failed");
 try { Directory.Delete(sandbox, recursive: true); } catch { /* sqlite may still hold handles */ }

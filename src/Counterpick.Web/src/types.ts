@@ -79,14 +79,30 @@ export interface DraftSlot {
   roleKnown?: boolean;
 }
 
-/** Where an enemy role on the board came from. Only "user" survives a new client update. */
-export type RoleSource = "client" | "user" | "claude";
+/**
+ * Where an enemy role on the board came from. "inferred" is the app's placement from
+ * play rates, re-done on every pick; "client" is the League client's assignment (never
+ * for enemies in a normal draft); "user" is the dropdown; "game" is the running game,
+ * which settles it for certain.
+ */
+export type RoleSource = "client" | "user" | "inferred" | "game";
+
+/** What `roles.infer` returns: the likeliest role for each locked enemy and how sure that is (0-1). */
+export interface RoleInference {
+  roles: Record<string, Role>;
+  confidence: Record<string, number>;
+}
+
+/** The `game.roles` payload: positions as the running game reports them, on both sides. */
+export interface GameRoles {
+  enemyRoles: Record<string, Role>;
+  allyRoles: Record<string, Role>;
+  yourRole: Role | null;
+}
 
 /** What `recs.request` returns. */
 export interface ShortlistResponse {
   recommendations: Recommendation[];
-  laneOpponent: string | null;
-  enemyRoles: Record<string, Role>;
   records: Record<string, MatchupRecord>;
 }
 
@@ -132,6 +148,8 @@ export interface ClientStatus {
 export interface PickRef {
   championKey: string;
   role: Role;
+  /** The role is an unsettled inference from play rates, not a fact. */
+  guessed?: boolean;
 }
 
 /** What the page sends with `recs.request` and `brief.request`. */
@@ -151,6 +169,9 @@ export interface AppConfigView {
   shortlistModel: string;
   primaryRole: Role;
   dataDragonVersion: string | null;
+  /** The patch the enemy-role play rates describe, and where they came from ("feed", "cache", "bundled"). */
+  roleRatesPatch: string | null;
+  roleRatesSource: string;
 }
 
 export interface NoteRecord {

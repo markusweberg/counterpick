@@ -309,3 +309,5 @@ input.field[type="search"]{width:100%}
 .champ-pick .nm{font-size:12px;font-weight:500;line-height:1.2}
 
 .rolesel.unknown{color:var(--hard);border-color:#D97F3C66;font-style:italic}
+.rolesel.guess{border-style:dashed}
+.h-cls .probable{color:var(--hard)}

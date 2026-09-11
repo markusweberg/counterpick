@@ -23,6 +23,7 @@ public partial class MainWindow : Window
     private readonly BriefCache _briefs;
     private readonly BackupService _backups;
     private readonly ChampionCatalog _catalog = new();
+    private readonly RoleRates _rates = new();
     private readonly ClaudeClient _claude;
     private LcuWatcher? _watcher;
     private Bridge? _bridge;
@@ -85,8 +86,13 @@ public partial class MainWindow : Window
         // The watcher emits through the bridge, so the bridge has to exist first. Its
         // constructor takes the watcher, so the watcher gets a forwarding lambda.
         _watcher = new LcuWatcher(_catalog, (name, payload) => _bridge?.Emit(name, payload));
-        _bridge = new Bridge(Web, _storage, _config, _backups, _briefs, _catalog, _watcher, _claude);
+        _bridge = new Bridge(Web, _storage, _config, _backups, _briefs, _catalog, _watcher, _claude, _rates);
         _watcher.Start();
+
+        // Warm the play-rate table so the first enemy pick is placed without waiting on
+        // the network. Any failure falls back to the bundled snapshot inside the loader.
+        _ = _rates.EnsureLoadedAsync().ContinueWith(
+            _ => Trace.Write("roles", $"play rates ready: {_rates.Source}, patch {_rates.Patch ?? "?"}, {_rates.Count} champions"));
 
         // Open real links in the user's browser instead of hijacking the app window.
         core.NewWindowRequested += (_, args) =>

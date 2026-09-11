@@ -3,11 +3,11 @@ import "./styles.css";
 import { call, callOr, isHosted } from "./bridge";
 import { initDataDragon } from "./ddragon";
 import {
-  addNote, assignRole, emptyDataState, emptySettingsState, laneOpponent, state,
+  addNote, emptyDataState, emptySettingsState, laneOpponent, state,
 } from "./state";
 import {
   bindRender, boot, changeRole, ensureBrief, loadPool, lockIn, newDraft, reloadConfig, rescore,
-  timerRemaining,
+  timerRemaining, userAssignedRole,
 } from "./session";
 import type { Phase, Role } from "./types";
 import { clock } from "./ui/atoms";
@@ -295,6 +295,12 @@ app.addEventListener("click", (e) => {
       if (state.picked && foe) void ensureBrief(state.picked, foe, true);
       return;
     }
+    case "brief-now": {
+      // Write it on the current placement without waiting for the game to confirm it.
+      const foe = laneOpponent();
+      if (state.picked && foe) void ensureBrief(state.picked, foe);
+      return;
+    }
     case "reset-roles":
       state.draft.enemyRoles = { Darius: "Top", Nidalee: "Jungle" };
       break;
@@ -316,8 +322,7 @@ app.addEventListener("change", (e) => {
 
   const roleSelect = el.closest<HTMLSelectElement>(".rolesel");
   if (roleSelect?.dataset.champ) {
-    assignRole(roleSelect.dataset.champ, roleSelect.value as Role);
-    void rescore();
+    userAssignedRole(roleSelect.dataset.champ, roleSelect.value as Role);
     return render();
   }
 

@@ -2,7 +2,7 @@
 
 import { isHosted } from "../bridge";
 import { champion } from "../champions";
-import { briefFor, laneOpponent, notesFor, poolBorrowed, state } from "../state";
+import { briefFor, laneConfidence, laneOpponent, laneSettled, notesFor, poolBorrowed, state } from "../state";
 import { availablePool, scoringBlocker } from "../session";
 import type { NoteRecord, Recommendation } from "../types";
 import { esc, portrait, recordLabel, rich, VERDICT_CLASS, VERDICT_COLOR } from "./atoms";
@@ -71,7 +71,11 @@ function subnote(): string {
   const jungler = Object.entries(d.enemyRoles).find(([k, r]) => r === "Jungle" && k !== foe)?.[0];
   const allies = d.ally.filter((s) => s.championKey && !s.isYou && !s.hovering).map((s) => champion(s.championKey!).name);
   const enemies = d.enemy.filter((s) => s.championKey && !s.hovering).map((s) => champion(s.championKey!).name);
-  const parts = [foe ? `the ${champion(foe).name} lane` : `their picks so far (${enemies.join(", ")}), no ${state.role.toLowerCase()} laner identified yet`];
+  const parts = [
+    foe
+      ? `${laneSettled() ? "the" : "probably the"} ${champion(foe).name} lane`
+      : `their picks so far (${enemies.join(", ")}), nobody placed in ${state.role.toLowerCase()} yet`,
+  ];
   if (jungler) parts.push(`${champion(jungler).name}'s jungle pressure`);
   if (allies.length) parts.push(`how each fits alongside ${allies.join(", ")}`);
   const hidden = d.enemyPicksRemaining;
@@ -130,7 +134,7 @@ export function draftView(): string {
         : "Start the League client and the draft appears here as it happens.";
     body = `<div class="bar"><div>
         <p class="eyebrow">${poolLabel()} · waiting for enemy picks</p>
-        <p class="subnote">${borrowedNote()}${waiting} The client does not say who plays where; the shortlist works that out, and you can correct it on the board.</p>
+        <p class="subnote">${borrowedNote()}${waiting} The client does not say who plays where; each pick is placed from how often it is played in each role, and you can correct it on the board.</p>
       </div></div>
       <div class="recs">${cards}</div>`;
   } else if (state.scoring === "error") {
@@ -183,7 +187,7 @@ export function briefView(): string {
   const foe = laneOpponent();
   if (!picked || !foe) {
     return notice("Nothing locked in yet",
-      foe ? "Lock a champion and the brief starts writing." : "No lane opponent is assigned, so there is no matchup to brief.");
+      foe ? "Lock a champion and the brief starts writing." : "No lane opponent is placed yet, so there is no matchup to brief.");
   }
 
   const me = champion(picked);
@@ -203,11 +207,25 @@ export function briefView(): string {
       ${noteList(notesFor(picked, foe), "Nothing saved for this matchup yet. Write a line after the game and it shows up here next time.")}
     </section>`;
 
-  if (!slot || slot.status === "loading") {
+  if (!slot) {
+    // Not requested: the placement is not sure enough to spend a brief on. It is written
+    // the moment the game confirms who is where.
+    const pct = Math.round(laneConfidence() * 100);
+    const body = laneSettled()
+      ? "Not requested yet."
+      : `The play rates put ${esc(opp.name)} in your lane at ${pct}%, which is not sure enough to write a
+         brief about. It is written the moment the game confirms who is where, on the loading screen. If
+         you can see it is right, write it now.`;
+    return `${head(`<button class="ghost" data-act="after">Game over →</button>`)}
+      <div class="notice quiet"><h3>${laneSettled() ? "Brief not written yet" : `Probably ${esc(opp.name)} in ${state.role.toLowerCase()}`}</h3>
+        <p>${body}</p>
+        <button class="ghost" data-act="brief-now">Write it now</button>
+      </div>${notes}`;
+  }
+  if (slot.status === "loading") {
     return `${head(`<button class="ghost" data-act="after">Game over →</button>`)}
       <div class="notice quiet"><h3>Writing the brief<span class="ellipsis"></span></h3>
-        <p>${slot ? "Claude is working through the matchup. This usually takes a few seconds." : "Not requested yet."}</p>
-        ${slot ? "" : `<button class="ghost" data-act="brief-retry">Write it now</button>`}
+        <p>Claude is working through the matchup. This usually takes a few seconds.</p>
       </div>${notes}`;
   }
   if (slot.status === "error") {
