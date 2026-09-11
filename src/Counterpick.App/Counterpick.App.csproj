@@ -8,9 +8,16 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>Counterpick.App</RootNamespace>
     <AssemblyName>Counterpick</AssemblyName>
+    <!-- The exe's icon: Explorer, the taskbar and the title bar pick it up from the binary. -->
+    <ApplicationIcon>Resources\counterpick.ico</ApplicationIcon>
     <!-- The Vite frontend lives beside this project and is built into it. -->
     <WebDir>$(MSBuildProjectDirectory)\..\Counterpick.Web</WebDir>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Also packed as a WPF resource so MainWindow.xaml can name it in Icon="...". -->
+    <Resource Include="Resources\counterpick.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Anthropic" Version="12.47.0" />

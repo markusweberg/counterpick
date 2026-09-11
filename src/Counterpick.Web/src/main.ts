@@ -13,7 +13,7 @@ import type { Phase, Role } from "./types";
 import { clock } from "./ui/atoms";
 import { board, hero, topbar } from "./ui/chrome";
 import { dataView, loadData } from "./ui/data";
-import { settingsView } from "./ui/settings";
+import { poolChips, poolGrid, poolGridCount, settingsView } from "./ui/settings";
 import { afterView, briefView, draftView } from "./ui/views";
 
 const app = document.getElementById("app")!;
@@ -52,6 +52,25 @@ function render(focusNote = false): void {
 }
 
 bindRender(() => render());
+
+/**
+ * The pool editor redraws only its own pieces while you filter or click, so the search
+ * box keeps focus and the rest of the screen stays put.
+ */
+function refreshPool(chips = true): void {
+  const grid = document.getElementById("poolGrid");
+  if (!grid) return;
+  grid.innerHTML = poolGrid();
+  const count = document.getElementById("poolCount");
+  if (count) count.textContent = poolGridCount();
+  if (chips) {
+    const c = document.getElementById("poolChips");
+    if (c) c.innerHTML = poolChips();
+    const n = state.settings.poolDraft.length;
+    const meta = document.querySelector<HTMLElement>(".panel.span .panel-meta");
+    if (meta) meta.textContent = n === 0 ? "empty" : `${n} in ${state.settings.poolRole.toLowerCase()}`;
+  }
+}
 
 /** Run a host call, refresh the panel, and report the outcome in one line. */
 async function dataAction(work: () => Promise<string | null>): Promise<void> {
@@ -115,8 +134,19 @@ async function loadPoolDraft(): Promise<void> {
 
 async function savePoolDraft(): Promise<void> {
   const role = state.settings.poolRole;
-  const championKeys = state.settings.poolDraft;
-  await callOr("pool.set", null, { role, championKeys });
+  const championKeys = [...state.settings.poolDraft];
+  if (isHosted) {
+    try {
+      await call("pool.set", { role, championKeys });
+    } catch (e) {
+      // The tile already flipped; put it back and say why.
+      state.settings.flash = `Could not save the pool: ${e instanceof Error ? e.message : String(e)}`;
+      state.settings.flashError = true;
+      await loadPoolDraft();
+      render();
+      return;
+    }
+  }
   // The pool on the board may be this role's own or borrowed from the primary role.
   if (role === state.role || role === state.poolRole) {
     await loadPool();
@@ -250,15 +280,12 @@ app.addEventListener("click", (e) => {
         return render();
       case "pool-role":
         s.poolRole = actionEl!.dataset.role as Role;
-        s.search = "";
         return void loadPoolDraft().then(() => render());
-      case "pool-add":
-        if (key && !s.poolDraft.includes(key)) s.poolDraft.push(key);
-        s.search = "";
-        return void savePoolDraft().then(() => render());
-      case "pool-remove":
-        s.poolDraft = s.poolDraft.filter((k) => k !== key);
-        return void savePoolDraft().then(() => render());
+      case "pool-toggle":
+        if (!key) return;
+        s.poolDraft = s.poolDraft.includes(key) ? s.poolDraft.filter((k) => k !== key) : [...s.poolDraft, key];
+        refreshPool();
+        return void savePoolDraft();
       case "key-clear":
         return void settingsAction(async () => {
           await call("config.setApiKey", { apiKey: "" });
@@ -346,7 +373,7 @@ app.addEventListener("input", (e) => {
   const el = e.target as HTMLElement;
   if (el.id === "poolSearch") {
     state.settings.search = (el as HTMLInputElement).value;
-    render();
+    refreshPool(false);
   }
 });
 

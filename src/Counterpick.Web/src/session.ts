@@ -6,6 +6,7 @@
 
 import { call, callOr, isHosted, on } from "./bridge";
 import { setCatalog } from "./champions";
+import { fetchCatalog } from "./ddragon";
 import {
   assignRole, emptyDraft, LANE_SETTLED, laneOpponent, laneSettled, noteKey, roleFixed, setRole, state,
 } from "./state";
@@ -24,7 +25,12 @@ export function bindRender(fn: () => void): void {
 
 /** Load config, pool and catalog, then attach to whatever the client is doing. */
 export async function boot(): Promise<void> {
-  if (!isHosted) return;
+  if (!isHosted) {
+    // Browser preview: no host, but the real champion list is still worth having.
+    await loadCatalog();
+    rerender();
+    return;
+  }
 
   const config = await callOr<AppConfigView | null>("config.get", null);
   if (config) {
@@ -75,6 +81,14 @@ export async function loadPool(): Promise<void> {
 }
 
 export async function loadCatalog(): Promise<void> {
+  if (!isHosted) {
+    try {
+      setCatalog(await fetchCatalog());
+    } catch (e) {
+      console.warn("Data Dragon catalog unavailable", e);
+    }
+    return;
+  }
   const res = await callOr<{ version: string | null; champions: CatalogChampion[] } | null>(
     "champions.list", null,
   );

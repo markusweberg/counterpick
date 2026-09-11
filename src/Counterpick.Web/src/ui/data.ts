@@ -65,17 +65,18 @@ function size(bytes: number): string {
 export function dataView(): string {
   const d = state.data;
 
-  const head = `<div class="bar">
+  const head = `<div class="bar page-bar">
       <div>
-        <p class="eyebrow">Data &amp; backups</p>
-        <p class="subnote">Your notes and results are the only thing here that cannot be
-          regenerated. Briefs are cached separately and are safe to lose.</p>
+        <p class="eyebrow">Counterpick · this machine</p>
+        <h2 class="page-title">Data &amp; backups</h2>
+        <p class="subnote">Notes and results are the only thing here that cannot be regenerated.
+          Briefs are cached separately and are safe to lose.</p>
       </div>
       <div class="bar-cta"><button class="ghost" data-act="back">← Back to draft</button></div>
     </div>`;
 
   if (!isHosted) {
-    return `${head}<div class="notice">
+    return `${head}<div class="notice quiet">
       <h3>Not running inside Counterpick</h3>
       <p>This panel reports on the real database, so it only works in the app itself.
          In the browser dev server there is no host to ask.</p>
@@ -86,7 +87,7 @@ export function dataView(): string {
   if (d.loading && !d.status) return `${head}<p class="subnote">Reading the database…</p>`;
 
   if (d.error) {
-    return `${head}<div class="notice">
+    return `${head}<div class="notice warn">
       <h3>Could not read the database</h3>
       <p>${esc(d.error)}</p>
       <button class="ghost" data-act="reload">Try again</button>
@@ -132,13 +133,15 @@ export function dataView(): string {
     </div>`;
 
   return `${head}${flash}${stats}${actions}
-    ${snapshotsSection(d.snapshots, d.confirmRestore)}
-    ${notesSection(d.notes, d.editing, d.confirmDelete)}`;
+    <div class="panels">
+      ${snapshotsSection(d.snapshots, d.confirmRestore)}
+      ${notesSection(d.notes, d.editing, d.confirmDelete)}
+    </div>`;
 }
 
 function snapshotsSection(snapshots: BackupInfo[], confirming: string | null): string {
   if (snapshots.length === 0) {
-    return `<section class="sect"><h3>Snapshots</h3>
+    return `<section class="panel span"><div class="panel-head"><h3>Snapshots</h3></div>
       <p class="empty-note">No snapshots yet. One is taken automatically whenever your
         notes change.</p></section>`;
   }
@@ -161,16 +164,18 @@ function snapshotsSection(snapshots: BackupInfo[], confirming: string | null): s
     })
     .join("");
 
-  return `<section class="sect"><h3>Snapshots</h3>
-    <p class="subnote" style="margin-bottom:12px">Restoring merges a snapshot back in.
-      It never overwrites, so notes written since are kept.</p>
+  return `<section class="panel span"><div class="panel-head"><h3>Snapshots</h3>
+      <span class="panel-meta">${snapshots.length} kept</span></div>
+    <p class="subnote">Restoring merges a snapshot back in. It never overwrites, so notes
+      written since are kept.</p>
     <div class="snaplist">${rows}</div></section>`;
 }
 
 function notesSection(notes: StoredNote[], editing: number | null, confirmDelete: number | null): string {
   if (notes.length === 0) {
-    return `<section class="sect"><h3>Your notes</h3>
-      <p class="empty-note">Nothing written yet. Notes you add after a game show up here.</p>
+    return `<section class="panel span"><div class="panel-head"><h3>Notes</h3></div>
+      <p class="empty-note">Nothing written yet. The line you write after a game shows up
+        here, grouped by matchup.</p>
     </section>`;
   }
 
@@ -196,7 +201,8 @@ function notesSection(notes: StoredNote[], editing: number | null, confirmDelete
     })
     .join("");
 
-  return `<section class="sect"><h3>Your notes (${notes.length})</h3>
+  return `<section class="panel span"><div class="panel-head"><h3>Notes</h3>
+      <span class="panel-meta">${notes.length} across ${groups.size} matchup${groups.size === 1 ? "" : "s"}</span></div>
     <div class="notegroups">${blocks}</div></section>`;
 }
 

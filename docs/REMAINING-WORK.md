@@ -18,7 +18,8 @@ to pick each piece up cold.
 | Champion catalog from Data Dragon | Done, cached per patch |
 | **Live draft from the League client** | Done, validated in a custom game and a real normal draft |
 | **Recommendations and briefs from Claude** | **Built; no successful call yet** (the key needs a workspace id, now a setting) |
-| Settings: API key, workspace id, role, models, pool editor | Done, pool editor reported broken in the app |
+| Settings: API key, workspace id, role, models, pool editor | Done; pool editor rebuilt 2026-09-11 (full roster, click to toggle) |
+| **UI pass: Settings and Data as panels, dark title bar, app icon** | Done 2026-09-11 |
 | **Following the role the client assigns you** | Done 2026-09-11, tested against the fixtures; not yet seen in a live autofill |
 | **Enemy roles from play rates, confirmed by the running game** | Done 2026-09-11, tested against the captured draft; not yet seen live |
 | Trace log under `%APPDATA%\Counterpick\logs` | Done: events, mapped drafts, Claude timings, raw payloads |
@@ -185,26 +186,48 @@ the class priors in `RoleInference.TagPriors`, and `LANE_SETTLED` (0.85). The te
 section "roles. placement" in `Program.cs` pins the captured draft's answer
 (Nunu jungle, Diana mid 0.65, Yone top 0.89, Thresh support 0.97, Veigar bot 0.79).
 
-### 3. UI overhaul  ← start here (1 and 2 are done)
+### 3. UI overhaul - done
 
-The web UI was ported from the prototype and then extended feature by feature; it
-needs a proper pass. Reported:
+Done 2026-09-11. What was reported, and what was done about it:
 
-- **The champion pool selector in Settings is broken.** Reproduce it first: it was
-  only ever checked in the browser preview, where the catalog is empty, not inside the
-  app with 173 champions. Suspects: the search re-renders the whole screen on every
-  keystroke (focus is restored by hand in `render()`), the add/remove buttons save
-  through `pool.set` and reload, and the grid is capped at 12 results without a
-  search term.
-- **The app is ugly.** The prototype in `prototype/counterpick.html` is the approved
-  look; the live app has drifted from it as screens were added (Settings and Data were
-  never designed). Do a design pass on those two screens and on the empty states.
-- **White bar at the top.** That is the default WPF title bar. Options: a dark title
-  bar via the DWM immersive dark mode attribute on the window handle, or
-  `WindowChrome` with a custom title bar drawn in the page's colours. The window
-  background is already the page ground, so only the chrome is wrong.
-- **No icon.** Add `ApplicationIcon` to `Counterpick.App.csproj` and `Icon` on the
-  window in `MainWindow.xaml`; the taskbar and title bar pick it up from there.
+- **The champion pool selector only showed part of the roster.** The grid was capped at
+  12 champions when nothing was typed, so most of the 173 could only be reached by
+  searching for them by name. Rebuilt: `poolGrid()` in `ui/settings.ts` shows the whole
+  roster as tiles, alphabetical; a tile in the pool is lit gold with a check, and a click
+  toggles it in or out (`pool-toggle` in `main.ts`). The chips above stay as the ordered
+  list of the pool. The filter box only redraws the grid and its count (`refreshPool()`),
+  so it never loses focus, and it ignores apostrophes ("kaisa" finds Kai'Sa). A save that
+  fails puts the tile back and says why in the flash line. Verified inside the app with
+  real key and mouse events through WebView2's remote-debugging port (see below).
+- **Settings and Data redesigned as panels.** Both screens now open with the same page
+  header (mono eyebrow, Cinzel title, subnote, back button) and lay their content out as
+  `.panel` surfaces with a mono heading and a right-aligned meta count. Settings has four:
+  API key, Draft (role and both models), Champion pool, Housekeeping (cached briefs and
+  the data versions). Data keeps the stat cards and actions and puts Snapshots and Notes
+  in panels. The two topbar links became a second segmented control matching the phase
+  steps. Empty states and notices are gold by default; only a failure is orange
+  (`notice(..., "warn")`).
+- **Dark title bar.** `TitleBar.cs` sets the DWM attributes on the window handle from
+  `OnSourceInitialized`: immersive dark mode, and on Windows 11 the caption colour
+  (`--sunk`), caption text (`--gold`) and border (`--line-hard`). The standard chrome
+  stays, only its paint changes; an older Windows ignores the calls.
+- **Icon.** `Resources/counterpick.ico`, the UI's beveled octagon in gold around a serif
+  C, in nine sizes from 16 to 256. Wired as `ApplicationIcon` in the csproj and `Icon` on
+  the window. Regenerate it with a script if the mark changes; the source of truth is
+  the description here, not a design file.
+
+The browser preview (`npm run dev`) now loads the real champion list straight from Data
+Dragon (`fetchCatalog()` in `ddragon.ts`), so the pool editor can be styled against all
+173 champions rather than the worked example's ten. The pool itself is not saved there.
+
+**Driving the real app from a script.** WebView2 honours
+`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222` in the environment
+of the exe. With that set, `http://127.0.0.1:9222/json` lists the page and its WebSocket
+URL, and any DevTools-protocol client can evaluate JavaScript in it, dispatch real key and
+mouse events (`Input.dispatchKeyEvent`, `Input.dispatchMouseEvent`) and take screenshots
+(`Page.captureScreenshot`). Node 22 has a global `WebSocket`, so a 40-line script does it.
+That is how the pool editor was reproduced and verified inside the app; use it whenever a
+bug only shows up hosted. Combine with `COUNTERPICK_DATA_DIR` for throwaway data.
 
 ## 4. Watch a draft with a working key
 
@@ -350,4 +373,6 @@ the reference for anything the live app should look like.
 | `Services/Bridge.cs` | Async dispatch; `draft.subscribe`, `roles.infer`, `recs.request`, `brief.request`, `champions.list`, `config.set` |
 | `Web/src/session.ts` | Live draft handling, enemy-role placement, when to score, when the brief is safe to write, phase transitions |
 | `Web/src/champions.ts` | Champion lookup backed by the catalog |
-| `Web/src/ui/settings.ts` | The settings screen |
+| `Web/src/ui/settings.ts` | The settings screen: panels and the roster-grid pool editor |
+| `TitleBar.cs` | Paints the native title bar in the page's colours through DWM |
+| `Resources/counterpick.ico` | The app icon, multi-size |

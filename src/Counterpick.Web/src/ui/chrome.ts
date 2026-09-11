@@ -76,10 +76,12 @@ export function topbar(): string {
     <div class="topbar-right">
       <div class="lcu"><span class="dot ${connected ? "" : "off"}"></span> ${clientLabel()}</div>
       ${right}
-      <button class="datalink" data-act="settings" title="API key, role, models and pool"
-        aria-current="${state.screen === "settings"}">Settings</button>
-      <button class="datalink" data-act="data" title="Notes, backups and export"
-        aria-current="${state.screen === "data"}">Data</button>
+      <nav class="steps" aria-label="Screens">
+        <button class="step" data-act="settings" title="API key, role, models and pool"
+          aria-current="${state.screen === "settings"}">Settings</button>
+        <button class="step" data-act="data" title="Notes, backups and export"
+          aria-current="${state.screen === "data"}">Data</button>
+      </nav>
     </div>
   </header>`;
 }

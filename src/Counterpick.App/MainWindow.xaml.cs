@@ -67,6 +67,15 @@ public partial class MainWindow : Window
         Closed += OnClosed;
     }
 
+    /// <summary>
+    /// The native window handle exists from here on; that is what the title-bar paint needs.
+    /// </summary>
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        TitleBar.Paint(this);
+    }
+
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         // Keep the WebView2 profile in %APPDATA% rather than beside the exe, so a clean

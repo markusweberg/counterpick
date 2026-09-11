@@ -6,6 +6,8 @@
  * the CDN directly and let the browser cache do the work.
  */
 
+import type { CatalogChampion } from "./types";
+
 const BASE = "https://ddragon.leagueoflegends.com";
 
 /** Fallback used until the live version resolves; kept current with the repo. */
@@ -38,6 +40,18 @@ export function squareUrl(championKey: string): string {
 /** 1215x717 splash, for the hero banner. Skin 0 is the base skin. */
 export function splashUrl(championKey: string): string {
   return `${BASE}/cdn/img/champion/splash/${championKey}_0.jpg`;
+}
+
+/**
+ * The full champion list, straight from the CDN. Inside the app the host serves the
+ * catalog (cached per patch); this is for the browser preview, so the pool editor can be
+ * tried against all 170-odd champions rather than the worked example's ten.
+ */
+export async function fetchCatalog(): Promise<CatalogChampion[]> {
+  const res = await fetch(`${BASE}/cdn/${version}/data/en_US/champion.json`);
+  if (!res.ok) throw new Error(`Data Dragon answered ${res.status}`);
+  const body = (await res.json()) as { data: Record<string, { id: string; key: string; name: string; tags: string[] }> };
+  return Object.values(body.data).map((c) => ({ key: c.id, name: c.name, numericId: Number(c.key), tags: c.tags }));
 }
 
 /** Tall portrait, unused today but the natural art for a compact list view. */

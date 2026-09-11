@@ -85,8 +85,9 @@ function subnote(): string {
   return `${borrowedNote()}Scored on ${parts.join(", ")}.${tail}`;
 }
 
-function notice(title: string, body: string, action = ""): string {
-  return `<div class="notice"><h3>${title}</h3><p>${body}</p>${action}</div>`;
+/** A boxed message in place of content. "warn" is for something that went wrong. */
+function notice(title: string, body: string, action = "", tone: "quiet" | "warn" = "quiet"): string {
+  return `<div class="notice ${tone}"><h3>${title}</h3>${body ? `<p>${body}</p>` : ""}${action}</div>`;
 }
 
 export function draftView(): string {
@@ -139,7 +140,7 @@ export function draftView(): string {
       <div class="recs">${cards}</div>`;
   } else if (state.scoring === "error") {
     body = notice("Scoring failed", esc(state.scoringError ?? "Unknown error"),
-      `<button class="ghost" data-act="rescore">Try again</button>`);
+      `<button class="ghost" data-act="rescore">Try again</button>`, "warn");
   } else if (state.recommendations.length === 0) {
     const cards = availablePool().map(unscoredCard).join("");
     body = `<div class="bar"><div>
@@ -230,7 +231,7 @@ export function briefView(): string {
   }
   if (slot.status === "error") {
     return `${head(`<button class="ghost" data-act="after">Game over →</button>`)}
-      ${notice("The brief did not arrive", esc(slot.error), `<button class="ghost" data-act="brief-retry">Try again</button>`)}
+      ${notice("The brief did not arrive", esc(slot.error), `<button class="ghost" data-act="brief-retry">Try again</button>`, "warn")}
       ${notes}`;
   }
 
