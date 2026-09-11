@@ -214,11 +214,15 @@ public sealed class ClaudeClient
         Task: rank the player's champion pool for the current draft. This is read during
         the pick timer, so every field is short.
 
-        Score 0-100 for how well the champion fits this exact draft: the lane matchup
-        first, then the enemy jungler, then the fit with allied picks, then what the
-        hidden enemy picks could still do. Verdict is one of Favorable, Even, Difficult,
-        Losing and must agree with the score. `why` is one sentence the player reads in
-        two seconds. `hints` are two or three fragments, each under ten words.
+        Score 0-100 for how well the champion fits this exact draft. Judge the whole
+        enemy comp: what they want to do, what they struggle against, and what this
+        champion brings into that. The lane matchup is the single heaviest factor but not
+        the majority of the score; a good lane into a comp this champion cannot fight
+        later should score below an even lane into a comp it beats. Then weigh the enemy
+        jungler, the fit with allied picks, and what the hidden enemy picks could still do.
+        Verdict is one of Favorable, Even, Difficult, Losing and must agree with the score.
+        `why` is one sentence the player reads in two seconds: lead with the comp reason,
+        then the lane. `hints` are two or three fragments, each under ten words.
 
         Include every champion in `pool` exactly once, using its `championKey` verbatim.
 
