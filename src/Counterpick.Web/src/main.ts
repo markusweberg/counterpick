@@ -2,18 +2,38 @@ import "./styles.css";
 
 import { call, callOr, isHosted } from "./bridge";
 import { initDataDragon } from "./ddragon";
-import { addNote, assignRole, emptyDataState, laneOpponent, state } from "./state";
+import {
+  addNote, assignRole, emptyDataState, emptySettingsState, laneOpponent, state,
+} from "./state";
+import {
+  bindRender, boot, changeRole, ensureBrief, lockIn, newDraft, reloadConfig, rescore, timerRemaining,
+} from "./session";
 import type { Phase, Role } from "./types";
+import { clock } from "./ui/atoms";
 import { board, hero, topbar } from "./ui/chrome";
 import { dataView, loadData } from "./ui/data";
+import { settingsView } from "./ui/settings";
 import { afterView, briefView, draftView } from "./ui/views";
 
 const app = document.getElementById("app")!;
 
 function render(focusNote = false): void {
-  // The Data panel is about the database, not the game, so it drops the hero and board.
+  // The Data and Settings screens are about the app, not the game, so they drop the
+  // hero and the board.
   if (state.screen === "data") {
     app.innerHTML = `<div class="app">${topbar()}<main class="wide">${dataView()}</main></div>`;
+    return;
+  }
+  if (state.screen === "settings") {
+    const search = document.getElementById("poolSearch") as HTMLInputElement | null;
+    const hadFocus = search !== null && document.activeElement === search;
+    const caret = search?.selectionStart ?? 0;
+    app.innerHTML = `<div class="app">${topbar()}<main class="wide">${settingsView()}</main></div>`;
+    if (hadFocus) {
+      const again = document.getElementById("poolSearch") as HTMLInputElement | null;
+      again?.focus();
+      again?.setSelectionRange(caret, caret);
+    }
     return;
   }
 
@@ -29,6 +49,8 @@ function render(focusNote = false): void {
 
   if (focusNote) document.getElementById("noteInput")?.focus();
 }
+
+bindRender(() => render());
 
 /** Run a host call, refresh the panel, and report the outcome in one line. */
 async function dataAction(work: () => Promise<string | null>): Promise<void> {
@@ -49,6 +71,21 @@ async function dataAction(work: () => Promise<string | null>): Promise<void> {
   render();
 }
 
+/** Same shape for the settings screen. */
+async function settingsAction(work: () => Promise<string | null>): Promise<void> {
+  const s = state.settings;
+  s.confirmClear = false;
+  try {
+    const message = await work();
+    s.flash = message;
+    s.flashError = false;
+  } catch (e) {
+    s.flash = e instanceof Error ? e.message : String(e);
+    s.flashError = true;
+  }
+  render();
+}
+
 async function openData(): Promise<void> {
   state.screen = "data";
   state.data = emptyDataState();
@@ -58,14 +95,42 @@ async function openData(): Promise<void> {
   render();
 }
 
+async function openSettings(): Promise<void> {
+  state.screen = "settings";
+  state.settings = emptySettingsState(state.role);
+  await loadPoolDraft();
+  render();
+}
+
+async function loadPoolDraft(): Promise<void> {
+  const role = state.settings.poolRole;
+  if (isHosted) {
+    const rows = await callOr<{ championKey: string }[]>("pool.get", [], { role });
+    state.settings.poolDraft = rows.map((r) => r.championKey);
+  } else {
+    state.settings.poolDraft = role === state.role ? [...state.pool] : [];
+  }
+}
+
+async function savePoolDraft(): Promise<void> {
+  const role = state.settings.poolRole;
+  const championKeys = state.settings.poolDraft;
+  await callOr("pool.set", null, { role, championKeys });
+  if (role === state.role) {
+    state.pool = [...championKeys];
+    state.scoredFor = null;
+    void rescore();
+  }
+}
+
 /* ── events ──────────────────────────────────────────────────────────── */
 
 app.addEventListener("click", (e) => {
   const target = e.target as HTMLElement;
 
-  const step = target.closest<HTMLButtonElement>(".step");
+  const step = target.closest<HTMLButtonElement>(".step[data-phase]");
   if (step && !step.disabled) {
-    // Picking a phase from the Data panel means "take me back to the session".
+    // Picking a phase from another screen means "take me back to the session".
     state.screen = "session";
     state.phase = step.dataset.phase as Phase;
     return render();
@@ -97,9 +162,10 @@ app.addEventListener("click", (e) => {
   const action = actionEl?.dataset.act;
   if (!action) return;
 
-  // ── data panel ──────────────────────────────────────────────────────
   if (action === "data") { void openData(); return; }
+  if (action === "settings") { void openSettings(); return; }
 
+  // ── data panel ──────────────────────────────────────────────────────
   if (state.screen === "data") {
     const path = actionEl?.dataset.path ?? "";
     const id = Number(actionEl?.dataset.id ?? 0);
@@ -168,19 +234,65 @@ app.addEventListener("click", (e) => {
     return;
   }
 
+  // ── settings ────────────────────────────────────────────────────────
+  if (state.screen === "settings") {
+    const key = actionEl?.dataset.key ?? "";
+    const s = state.settings;
+
+    switch (action) {
+      case "back":
+        state.screen = "session";
+        return render();
+      case "cancel":
+        s.confirmClear = false;
+        return render();
+      case "pool-role":
+        s.poolRole = actionEl!.dataset.role as Role;
+        s.search = "";
+        return void loadPoolDraft().then(() => render());
+      case "pool-add":
+        if (key && !s.poolDraft.includes(key)) s.poolDraft.push(key);
+        s.search = "";
+        return void savePoolDraft().then(() => render());
+      case "pool-remove":
+        s.poolDraft = s.poolDraft.filter((k) => k !== key);
+        return void savePoolDraft().then(() => render());
+      case "key-clear":
+        return void settingsAction(async () => {
+          await call("config.setApiKey", { apiKey: "" });
+          await reloadConfig();
+          return "API key removed.";
+        });
+      case "clear-briefs":
+        s.confirmClear = true;
+        return render();
+      case "clear-briefs-go":
+        return void settingsAction(async () => {
+          await call("brief.clearCache");
+          state.briefs = {};
+          return "Cached briefs cleared.";
+        });
+    }
+    return;
+  }
+
+  // ── session ─────────────────────────────────────────────────────────
   switch (action) {
     case "lock":
-      state.picked = state.selected;
-      state.phase = "locked";
-      break;
+      if (state.selected) lockIn(state.selected);
+      return;
     case "after":
       state.phase = "after";
       break;
     case "draft":
-      state.phase = "draft";
-      state.picked = null;
-      state.result = null;
-      break;
+      return newDraft();
+    case "rescore":
+      return void rescore(true);
+    case "brief-retry": {
+      const foe = laneOpponent();
+      if (state.picked && foe) void ensureBrief(state.picked, foe, true);
+      return;
+    }
     case "reset-roles":
       state.draft.enemyRoles = { Darius: "Top", Nidalee: "Jungle" };
       break;
@@ -198,14 +310,67 @@ app.addEventListener("keydown", (e) => {
 });
 
 app.addEventListener("change", (e) => {
-  const select = (e.target as HTMLElement).closest<HTMLSelectElement>(".rolesel");
-  if (!select?.dataset.champ) return;
-  assignRole(select.dataset.champ, select.value as Role);
-  render();
+  const el = e.target as HTMLElement;
+
+  const roleSelect = el.closest<HTMLSelectElement>(".rolesel");
+  if (roleSelect?.dataset.champ) {
+    assignRole(roleSelect.dataset.champ, roleSelect.value as Role);
+    void rescore();
+    return render();
+  }
+
+  const setting = el.closest<HTMLSelectElement>("[data-setting]");
+  if (setting) {
+    const name = setting.dataset.setting!;
+    const value = setting.value;
+    if (name === "primaryRole") {
+      void changeRole(value as Role).then(() => loadPoolDraft()).then(() => render());
+      return;
+    }
+    void settingsAction(async () => {
+      await call("config.set", { [name]: value });
+      await reloadConfig();
+      return null;
+    });
+  }
+});
+
+app.addEventListener("input", (e) => {
+  const el = e.target as HTMLElement;
+  if (el.id === "poolSearch") {
+    state.settings.search = (el as HTMLInputElement).value;
+    render();
+  }
 });
 
 app.addEventListener("submit", (e) => {
   const form = e.target as HTMLFormElement;
+
+  if (form.id === "apiKeyForm") {
+    e.preventDefault();
+    const input = form.elements.namedItem("apiKey") as HTMLInputElement;
+    const apiKey = input.value.trim();
+    if (!apiKey) return;
+    void settingsAction(async () => {
+      await call("config.setApiKey", { apiKey });
+      await reloadConfig();
+      state.scoredFor = null;
+      return "API key saved.";
+    });
+    return;
+  }
+
+  if (form.id === "workspaceForm") {
+    e.preventDefault();
+    const workspaceId = (form.elements.namedItem("workspaceId") as HTMLInputElement).value.trim();
+    void settingsAction(async () => {
+      await call("config.set", { workspaceId });
+      await reloadConfig();
+      state.scoredFor = null;
+      return workspaceId ? "Workspace id saved." : "Workspace id cleared.";
+    });
+    return;
+  }
 
   const editId = form.dataset?.editId;
   if (editId) {
@@ -237,6 +402,15 @@ app.addEventListener("submit", (e) => {
   render(true);
 });
 
+/* ── clock ───────────────────────────────────────────────────────────── */
+
+// Only the digits change each second; a full re-render would drop a focused dropdown.
+setInterval(() => {
+  if (state.screen !== "session" || state.phase !== "draft" || !state.live || state.timerInfinite) return;
+  const el = document.querySelector<HTMLElement>(".clock .t");
+  if (el) el.textContent = clock(timerRemaining());
+}, 1000);
+
 /* ── boot ────────────────────────────────────────────────────────────── */
 
 async function start(): Promise<void> {
@@ -244,12 +418,10 @@ async function start(): Promise<void> {
 
   // Resolve the current patch, then repaint so art comes from the right version.
   await initDataDragon();
+  render();
 
-  if (isHosted) {
-    const config = await callOr<{ primaryRole?: string }>("config.get", {});
-    if (config.primaryRole) state.role = config.primaryRole as Role;
-  }
-
+  await boot();
+  void rescore();
   render();
 }
 

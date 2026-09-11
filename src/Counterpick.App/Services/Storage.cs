@@ -386,12 +386,17 @@ public sealed class Storage
 
         try
         {
+            // The incoming file may predate a migration - a mirror written by an older
+            // build, or a snapshot taken before an upgrade. Read what it has.
+            var hasUpdatedAt = HasColumn(c, "incoming", "notes", "updated_at");
+            var updatedAt = hasUpdatedAt ? "COALESCE(updated_at, created_at)" : "created_at";
+
             using var tx = c.BeginTransaction();
             using var cmd = c.CreateCommand();
-            cmd.CommandText = """
+            cmd.CommandText = $"""
                 INSERT OR IGNORE INTO main.notes (champion_key, opponent_key, role, body, created_at, updated_at)
                     SELECT champion_key, opponent_key, role, body, created_at,
-                           COALESCE(updated_at, created_at) FROM incoming.notes;
+                           {updatedAt} FROM incoming.notes;
                 INSERT OR IGNORE INTO main.games (champion_key, opponent_key, role, won, played_at)
                     SELECT champion_key, opponent_key, role, won, played_at FROM incoming.games;
                 INSERT OR IGNORE INTO main.pool (champion_key, role, added_at)
@@ -411,5 +416,15 @@ public sealed class Storage
         return new DataCounts(after.Notes - before.Notes,
                               after.Games - before.Games,
                               after.Pool - before.Pool);
+    }
+
+    private static bool HasColumn(SqliteConnection c, string schema, string table, string column)
+    {
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = $"PRAGMA {schema}.table_info({table});";
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+            if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
     }
 }

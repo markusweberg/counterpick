@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Counterpick.App.Services.Lcu;
 using Microsoft.Web.WebView2.Wpf;
 
 namespace Counterpick.App.Services;
@@ -10,11 +11,13 @@ namespace Counterpick.App.Services;
 /// The single seam between the web UI and C#.
 ///
 /// The UI sends {"id","method","payload"} and gets back {"id","ok","result"} or
-/// {"id","ok":false,"error"}. C# can also push unsolicited {"event","payload"} messages,
-/// which is how live champ select updates will arrive once the LCU listener lands.
+/// {"id","ok":false,"error"}. C# also pushes unsolicited {"event","payload"} messages -
+/// that is how live champ select updates arrive from <see cref="LcuWatcher"/>.
 ///
 /// Keeping every call through one switch means the TypeScript side has exactly one
-/// typed client to maintain (see Counterpick.Web/src/bridge.ts).
+/// typed client to maintain (see Counterpick.Web/src/bridge.ts). Methods that talk to
+/// the network return a Task and are awaited on the UI thread, so a slow Claude call
+/// never blocks a fast storage call.
 /// </summary>
 public sealed class Bridge
 {
@@ -22,18 +25,28 @@ public sealed class Bridge
     private readonly Storage _storage;
     private readonly AppConfig _config;
     private readonly BackupService _backups;
+    private readonly BriefCache _briefs;
+    private readonly ChampionCatalog _catalog;
+    private readonly LcuWatcher _watcher;
+    private readonly ClaudeClient _claude;
 
     private static readonly JsonSerializerOptions Json = new()
     {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DictionaryKeyPolicy = null
     };
 
-    public Bridge(WebView2 web, Storage storage, AppConfig config, BackupService backups)
+    public Bridge(WebView2 web, Storage storage, AppConfig config, BackupService backups,
+                  BriefCache briefs, ChampionCatalog catalog, LcuWatcher watcher, ClaudeClient claude)
     {
         _web = web;
         _storage = storage;
         _config = config;
         _backups = backups;
+        _briefs = briefs;
+        _catalog = catalog;
+        _watcher = watcher;
+        _claude = claude;
         _web.WebMessageReceived += OnMessage;
     }
 
@@ -45,49 +58,59 @@ public sealed class Bridge
             ["event"] = name,
             ["payload"] = payload is null ? null : JsonSerializer.SerializeToNode(payload, Json)
         };
-        _web.Dispatcher.Invoke(() => _web.CoreWebView2?.PostWebMessageAsJson(envelope.ToJsonString()));
+        var text = envelope.ToJsonString();
+        _web.Dispatcher.BeginInvoke(() => _web.CoreWebView2?.PostWebMessageAsJson(text));
     }
 
-    private void OnMessage(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs e)
+    private async void OnMessage(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs e)
     {
-        JsonNode? request = null;
+        string? id = null;
         try
         {
-            request = JsonNode.Parse(e.WebMessageAsJson);
-            var id = request?["id"]?.GetValue<string>();
+            var request = JsonNode.Parse(e.WebMessageAsJson);
+            id = request?["id"]?.GetValue<string>();
             var method = request?["method"]?.GetValue<string>();
             if (id is null || method is null) return;
 
-            try
-            {
-                Reply(id, true, Dispatch(method, request?["payload"]));
-            }
-            catch (Exception ex)
-            {
-                // A failing call must not take the UI down with it. The web side turns
-                // this into a visible message rather than a silent dead control.
-                Reply(id, false, null, $"{ex.GetType().Name}: {ex.Message}");
-            }
+            var result = Dispatch(method, request?["payload"]);
+            if (result is Task<object?> pending) result = await pending;
+            Reply(id, true, result);
         }
         catch (JsonException)
         {
             // Not our envelope. Ignore rather than crash on stray page messages.
         }
+        catch (Exception ex) when (id is not null)
+        {
+            // A failing call must not take the UI down with it. The web side turns
+            // this into a visible message rather than a silent dead control.
+            Trace.Write("bridge", $"call failed: {Describe(ex)}");
+            Reply(id, false, null, Describe(ex));
+        }
     }
 
     private object? Dispatch(string method, JsonNode? p) => method switch
     {
-        "config.get" => new
-        {
-            hasApiKey = !string.IsNullOrWhiteSpace(_config.ApiKey),
-            model = _config.Model,
-            primaryRole = _config.PrimaryRole,
-            dataDragonVersion = _config.DataDragonVersion
-        },
+        // ── settings ────────────────────────────────────────────────────
+        "config.get" => ConfigView(),
 
         "config.setApiKey" => Run(() =>
         {
-            _config.ApiKey = Str(p, "apiKey");
+            var key = Str(p, "apiKey")?.Trim();
+            _config.ApiKey = string.IsNullOrEmpty(key) ? null : key;
+            _config.Save();
+        }),
+
+        "config.set" => Run(() =>
+        {
+            if (Str(p, "primaryRole") is { } role) _config.PrimaryRole = role;
+            if (Str(p, "model") is { } model) _config.Model = model;
+            if (Str(p, "shortlistModel") is { } fast) _config.ShortlistModel = fast;
+            if (p?["workspaceId"] is not null)
+            {
+                var ws = Str(p, "workspaceId")?.Trim();
+                _config.WorkspaceId = string.IsNullOrEmpty(ws) ? null : ws;
+            }
             _config.Save();
         }),
 
@@ -97,6 +120,9 @@ public sealed class Bridge
             _config.Save();
         }),
 
+        // ── champions and pool ──────────────────────────────────────────
+        "champions.list" => ChampionsAsync(),
+
         "pool.get" => _storage.GetPool(Str(p, "role"))
                               .Select(x => new { championKey = x.ChampionKey, role = x.Role }),
 
@@ -104,6 +130,17 @@ public sealed class Bridge
             Str(p, "role") ?? _config.PrimaryRole,
             p?["championKeys"]?.AsArray().Select(n => n!.GetValue<string>()) ?? [])),
 
+        // ── live draft ──────────────────────────────────────────────────
+        "draft.subscribe" => new { status = _watcher.Status, draft = _watcher.CurrentDraft },
+
+        // ── Claude ──────────────────────────────────────────────────────
+        "recs.request" => RecommendAsync(p),
+
+        "brief.request" => BriefAsync(p),
+
+        "brief.clearCache" => Run(_briefs.Clear),
+
+        // ── notes and results ───────────────────────────────────────────
         "notes.get" => _storage.GetNotes(Req(p, "championKey"), Req(p, "opponentKey"), Req(p, "role"))
                                .Select(n => new { id = n.Id, body = n.Body, createdAt = n.CreatedAt }),
 
@@ -137,7 +174,7 @@ public sealed class Bridge
 
         "record.get" => Wins(_storage.GetRecord(Req(p, "championKey"), Req(p, "opponentKey"), Req(p, "role"))),
 
-        // ── data safety ──────────────────────────────────────────────────
+        // ── data safety ─────────────────────────────────────────────────
         "backup.status" => _backups.Status(),
 
         "backup.now" => _backups.Snapshot("manual"),
@@ -155,12 +192,134 @@ public sealed class Bridge
 
         "shell.reveal" => Run(() => Reveal(Req(p, "path"))),
 
-        // Not built yet - the UI runs on mock data until these land.
-        "draft.subscribe" or "brief.request" =>
-            throw new NotImplementedException($"'{method}' arrives with the LCU and Claude clients."),
-
         _ => throw new ArgumentException($"Unknown method '{method}'.")
     };
+
+    // ── settings ─────────────────────────────────────────────────────────
+
+    private object ConfigView() => new
+    {
+        hasApiKey = _claude.HasApiKey,
+        workspaceId = _config.WorkspaceId ?? "",
+        model = _config.Model,
+        shortlistModel = _config.ShortlistModel,
+        primaryRole = _config.PrimaryRole,
+        dataDragonVersion = _catalog.Version ?? _config.DataDragonVersion
+    };
+
+    // ── champions ────────────────────────────────────────────────────────
+
+    private async Task<object?> ChampionsAsync()
+    {
+        await _catalog.EnsureLoadedAsync();
+        if (_catalog.Version is { } v && v != _config.DataDragonVersion)
+        {
+            _config.DataDragonVersion = v;
+            _config.Save();
+        }
+        return new
+        {
+            version = _catalog.Version,
+            champions = _catalog.Champions.Select(c => new
+            {
+                key = c.Key, name = c.Name, numericId = c.NumericId, tags = c.Tags
+            })
+        };
+    }
+
+    // ── Claude ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Payload: { role, championKeys[], draft }. Names, classes, notes and records are
+    /// filled in here rather than trusted from the page - the page only knows keys.
+    /// </summary>
+    private async Task<object?> RecommendAsync(JsonNode? p)
+    {
+        await _catalog.EnsureLoadedAsync();
+        var role = Str(p, "role") ?? _config.PrimaryRole;
+        var draft = ParseDraft(p?["draft"], role);
+        var keys = p?["championKeys"]?.AsArray().Select(n => n!.GetValue<string>()).ToList() ?? [];
+
+        var pool = keys.Select(k => CandidateFor(k, draft.LaneOpponent?.ChampionKey, role)).ToList();
+        Trace.Write("claude", $"shortlist requested: {role} vs {draft.LaneOpponent?.ChampionKey ?? "?"}, pool [{string.Join(",", keys)}], " +
+                              $"enemy [{string.Join(",", draft.EnemyPicks.Select(p => p.ChampionKey))}], ally [{string.Join(",", draft.AllyPicks.Select(p => p.ChampionKey))}]");
+        var started = System.Diagnostics.Stopwatch.StartNew();
+        var result = await _claude.ShortlistAsync(draft, pool);
+        Trace.Write("claude", $"shortlist ready in {started.ElapsedMilliseconds}ms: " +
+                              $"{string.Join(" ", result.Recommendations.Select(r => $"{r.ChampionKey}={r.Score}"))}; " +
+                              $"lane={result.LaneOpponent ?? "?"} roles[{string.Join(",", result.EnemyRoles.Select(kv => $"{kv.Key}:{kv.Value}"))}]");
+
+        return new
+        {
+            recommendations = result.Recommendations,
+            laneOpponent = result.LaneOpponent,
+            enemyRoles = result.EnemyRoles,
+            records = pool.ToDictionary(c => c.ChampionKey, c => new { wins = c.Wins, losses = c.Losses })
+        };
+    }
+
+    /// <summary>
+    /// Payload: { championKey, opponentKey, role, draft, force? }. Cached per matchup and
+    /// per notes fingerprint: writing a note invalidates the brief that predates it.
+    /// </summary>
+    private async Task<object?> BriefAsync(JsonNode? p)
+    {
+        await _catalog.EnsureLoadedAsync();
+        var championKey = Req(p, "championKey");
+        var opponentKey = Req(p, "opponentKey");
+        var role = Str(p, "role") ?? _config.PrimaryRole;
+        var force = p?["force"]?.GetValue<bool>() ?? false;
+
+        var fingerprint = BriefCache.FingerprintFor(_storage, championKey, opponentKey, role);
+        if (!force && _briefs.Get(championKey, opponentKey, role, fingerprint) is { } cached)
+        {
+            Trace.Write("claude", $"brief {championKey} vs {opponentKey} ({role}) served from cache");
+            return new { brief = JsonNode.Parse(cached), cached = true };
+        }
+
+        var draft = ParseDraft(p?["draft"], role);
+        var me = CandidateFor(championKey, opponentKey, role);
+        var opponent = new PickInfo(opponentKey, NameOf(opponentKey), role);
+
+        Trace.Write("claude", $"brief requested: {championKey} vs {opponentKey} ({role}), {me.Notes.Count} note(s), force={force}");
+        var started = System.Diagnostics.Stopwatch.StartNew();
+        var brief = await _claude.BriefAsync(draft, me, opponent);
+        Trace.Write("claude", $"brief ready in {started.ElapsedMilliseconds}ms");
+        var body = JsonSerializer.Serialize(brief, Json);
+        _briefs.Put(championKey, opponentKey, role, fingerprint, body);
+        return new { brief = JsonNode.Parse(body), cached = false };
+    }
+
+    private Candidate CandidateFor(string championKey, string? opponentKey, string role)
+    {
+        var info = _catalog.ByKey(championKey);
+        var notes = opponentKey is null
+            ? []
+            : _storage.GetNotes(championKey, opponentKey, role).Select(n => n.Body).ToList();
+        var record = opponentKey is null ? new MatchupRecord(0, 0) : _storage.GetRecord(championKey, opponentKey, role);
+        return new Candidate(championKey, info?.Name ?? championKey, info?.Tags ?? [], notes, record.Wins, record.Losses);
+    }
+
+    private DraftContext ParseDraft(JsonNode? d, string role)
+    {
+        List<PickInfo> Picks(string field) =>
+            d?[field]?.AsArray()
+                .Select(n => new PickInfo(Req(n, "championKey"), NameOf(Req(n, "championKey")), Str(n, "role") ?? "?"))
+                .ToList() ?? [];
+
+        var lane = d?["laneOpponent"];
+        return new DraftContext(
+            Role: role,
+            LaneOpponent: lane is null ? null : new PickInfo(Req(lane, "championKey"), NameOf(Req(lane, "championKey")), role),
+            EnemyPicks: Picks("enemyPicks"),
+            AllyPicks: Picks("allyPicks"),
+            EnemyPicksRemaining: d?["enemyPicksRemaining"]?.GetValue<int>() ?? 0,
+            Bans: d?["bans"]?.AsArray().Select(n => n!.GetValue<string>()).ToList() ?? []);
+    }
+
+    private string NameOf(string key) => _catalog.ByKey(key)?.Name ?? key;
+
+    // ── helpers ──────────────────────────────────────────────────────────
 
     private static object Wins(MatchupRecord r) => new { wins = r.Wins, losses = r.Losses };
 
@@ -207,6 +366,15 @@ public sealed class Bridge
 
     private static long Num(JsonNode? p, string key) =>
         p?[key]?.GetValue<long>() ?? throw new ArgumentException($"Missing required field '{key}'.");
+
+    /// <summary>The innermost message is the one worth showing; wrappers just add noise.</summary>
+    private static string Describe(Exception ex)
+    {
+        while (ex is AggregateException { InnerException: { } inner }) ex = inner;
+        return ex is InvalidOperationException or ArgumentException
+            ? ex.Message
+            : $"{ex.GetType().Name}: {ex.Message}";
+    }
 
     private void Reply(string id, bool ok, object? result, string? error = null)
     {

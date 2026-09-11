@@ -2,6 +2,7 @@ using System.IO;
 using System.Net.Sockets;
 using System.Windows;
 using Counterpick.App.Services;
+using Counterpick.App.Services.Lcu;
 using Microsoft.Web.WebView2.Core;
 
 namespace Counterpick.App;
@@ -21,6 +22,9 @@ public partial class MainWindow : Window
     private readonly Storage _storage;
     private readonly BriefCache _briefs;
     private readonly BackupService _backups;
+    private readonly ChampionCatalog _catalog = new();
+    private readonly ClaudeClient _claude;
+    private LcuWatcher? _watcher;
     private Bridge? _bridge;
 
     public MainWindow()
@@ -28,6 +32,7 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         AppPaths.EnsureCreated();
+        Trace.Start();
         _config = AppConfig.Load();
 
         _storage = new Storage();
@@ -40,9 +45,19 @@ public partial class MainWindow : Window
         _briefs = new BriefCache();
         _briefs.EnsureSchema();
 
+        _claude = new ClaudeClient(_config);
+
         // A fresh install with an empty database pulls the OneDrive mirror back in.
-        // Nothing local to lose, so no need to ask.
-        _backups.RestoreFromMirrorIfEmpty();
+        // Nothing local to lose, so no need to ask - and nothing to lose either if the
+        // mirror is unreadable, so it must never stop the app from opening.
+        try
+        {
+            _backups.RestoreFromMirrorIfEmpty();
+        }
+        catch (Exception)
+        {
+            // The Data panel still offers a manual restore, which reports its error.
+        }
 
         // One snapshot per session, and only when something actually changed.
         _backups.SnapshotIfChanged("startup");
@@ -67,7 +82,11 @@ public partial class MainWindow : Window
         core.Settings.IsSwipeNavigationEnabled = false;
         core.Settings.AreDevToolsEnabled = true;   // F12 stays available; this is a personal tool
 
-        _bridge = new Bridge(Web, _storage, _config, _backups);
+        // The watcher emits through the bridge, so the bridge has to exist first. Its
+        // constructor takes the watcher, so the watcher gets a forwarding lambda.
+        _watcher = new LcuWatcher(_catalog, (name, payload) => _bridge?.Emit(name, payload));
+        _bridge = new Bridge(Web, _storage, _config, _backups, _briefs, _catalog, _watcher, _claude);
+        _watcher.Start();
 
         // Open real links in the user's browser instead of hijacking the app window.
         core.NewWindowRequested += (_, args) =>
@@ -88,6 +107,7 @@ public partial class MainWindow : Window
     /// </summary>
     private void OnClosed(object? sender, EventArgs e)
     {
+        _watcher?.Dispose();
         try
         {
             _backups.SnapshotIfChanged("shutdown");

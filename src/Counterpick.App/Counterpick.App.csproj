@@ -13,8 +13,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Anthropic" Version="12.47.0" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <PackageReference Include="System.Management" Version="10.0.12" />
   </ItemGroup>
 
   <!--
@@ -27,16 +29,12 @@
 
     Skip it with:  dotnet build -p:SkipFrontend=true
   -->
-  <Target Name="RestoreFrontend"
-          BeforeTargets="BuildFrontend"
-          Condition="'$(SkipFrontend)' != 'true' AND !Exists('$(WebDir)\node_modules')">
+  <Target Name="RestoreFrontend" BeforeTargets="BuildFrontend" Condition="'$(SkipFrontend)' != 'true' AND !Exists('$(WebDir)\node_modules')">
     <Message Importance="high" Text="Counterpick: installing frontend packages (first run only)..." />
     <Exec Command="npm install" WorkingDirectory="$(WebDir)" />
   </Target>
 
-  <Target Name="BuildFrontend"
-          BeforeTargets="Build"
-          Condition="'$(SkipFrontend)' != 'true'">
+  <Target Name="BuildFrontend" BeforeTargets="Build" Condition="'$(SkipFrontend)' != 'true'">
     <Message Importance="high" Text="Counterpick: building frontend..." />
     <Exec Command="npm run build" WorkingDirectory="$(WebDir)" />
   </Target>
@@ -53,18 +51,14 @@
     <ItemGroup>
       <FrontendFile Include="$(WebDir)\dist\**\*" />
     </ItemGroup>
-    <Copy SourceFiles="@(FrontendFile)"
-          DestinationFiles="@(FrontendFile->'$(OutDir)wwwroot\%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(FrontendFile)" DestinationFiles="@(FrontendFile->'$(OutDir)wwwroot\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
 
   <Target Name="PublishFrontend" AfterTargets="Publish" Condition="'$(SkipFrontend)' != 'true'">
     <ItemGroup>
       <FrontendFile Include="$(WebDir)\dist\**\*" />
     </ItemGroup>
-    <Copy SourceFiles="@(FrontendFile)"
-          DestinationFiles="@(FrontendFile->'$(PublishDir)wwwroot\%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(FrontendFile)" DestinationFiles="@(FrontendFile->'$(PublishDir)wwwroot\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

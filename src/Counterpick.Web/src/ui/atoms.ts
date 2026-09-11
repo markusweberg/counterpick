@@ -1,10 +1,18 @@
 import type { Verdict } from "../types";
 import { squareUrl } from "../ddragon";
-import { champion } from "../data/scenario";
+import { champion } from "../champions";
 
-/** Escape anything the user typed. Authored copy may contain <strong> and is not escaped. */
+/** Escape anything that is not authored markup. */
 export function esc(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+}
+
+/**
+ * Brief copy may emphasise one phrase with <strong>. It comes back from a model, so
+ * everything else is escaped and only that one tag is let through.
+ */
+export function rich(s: string): string {
+  return esc(s).replace(/&lt;(\/?)strong&gt;/g, "<$1strong>");
 }
 
 export const VERDICT_CLASS: Record<Verdict, string> = {
@@ -31,4 +39,10 @@ export function portrait(championKey: string | null, cls = ""): string {
 export function recordLabel(record: { wins: number; losses: number } | undefined): string {
   if (!record || record.wins + record.losses === 0) return "no games yet";
   return `${record.wins}–${record.losses} on record`;
+}
+
+/** m:ss for the pick clock. */
+export function clock(ms: number): string {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }

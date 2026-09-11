@@ -25,6 +25,15 @@
     <Compile Include="..\..\src\Counterpick.App\Services\BriefCache.cs" />
     <Compile Include="..\..\src\Counterpick.App\Services\BackupService.cs" />
     <Compile Include="..\..\src\Counterpick.App\Services\DataTransfer.cs" />
+    <!-- The pure half of the League client listener: parsing and mapping, no sockets. -->
+    <Compile Include="..\..\src\Counterpick.App\Services\ChampionCatalog.cs" />
+    <Compile Include="..\..\src\Counterpick.App\Services\Lcu\LcuEndpoint.cs" />
+    <Compile Include="..\..\src\Counterpick.App\Services\Lcu\DraftMapper.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Champ select payloads captured from a live client, identifiers scrubbed. -->
+    <None Include="fixtures\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

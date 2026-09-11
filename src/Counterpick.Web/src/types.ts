@@ -15,10 +15,18 @@ export interface Champion {
   splashPos: string;
 }
 
+/** One row of Data Dragon's champion.json, as `champions.list` returns it. */
+export interface CatalogChampion {
+  key: string;
+  name: string;
+  numericId: number;
+  tags: string[];
+}
+
 export interface LaneBeat {
   /** "Lv 3", "Bleed", "1st back" - a point in the game, not a sequence number. */
   mark: string;
-  /** May contain <strong>. Authored copy, never user input. */
+  /** May contain <strong>. Rendered through rich(), which allows nothing else. */
   text: string;
 }
 
@@ -50,7 +58,11 @@ export interface Recommendation {
   why: string;
   /** Two or three fragments under the why line. */
   hints: string[];
-  brief: Brief;
+  /**
+   * Present on the worked example only. Live briefs are a separate, slower call and
+   * live in state.briefs, keyed by matchup.
+   */
+  brief?: Brief;
 }
 
 export interface DraftSlot {
@@ -58,13 +70,83 @@ export interface DraftSlot {
   role: Role;
   isYou?: boolean;
   onTheClock?: boolean;
+  /** Shown but not locked. Hovers appear on the board without triggering a re-score. */
+  hovering?: boolean;
+  /**
+   * The role came from the client. False means seat order, a placeholder: in a normal
+   * draft the client never assigns enemy positions, so those come from Claude or from you.
+   */
+  roleKnown?: boolean;
+}
+
+/** Where an enemy role on the board came from. Only "user" survives a new client update. */
+export type RoleSource = "client" | "user" | "claude";
+
+/** What `recs.request` returns. */
+export interface ShortlistResponse {
+  recommendations: Recommendation[];
+  laneOpponent: string | null;
+  enemyRoles: Record<string, Role>;
+  records: Record<string, MatchupRecord>;
 }
 
 export interface DraftState {
   ally: DraftSlot[];
   enemy: DraftSlot[];
-  /** Enemy champions that have been picked, mapped to the role you believe they play. */
+  /** Enemy champions that have been locked, mapped to the role you believe they play. */
   enemyRoles: Record<string, Role>;
+  bans: string[];
+  /** How many enemy picks are still hidden. */
+  enemyPicksRemaining: number;
+}
+
+/** The `draft.changed` payload from the League client listener (DraftPayload in C#). */
+export interface LiveDraft {
+  ally: DraftSlot[];
+  enemy: DraftSlot[];
+  enemyRoles: Record<string, Role>;
+  bans: string[];
+  timerMs: number;
+  /** Practice tool runs with no clock. */
+  timerInfinite: boolean;
+  /** "PLANNING", "BAN_PICK", "FINALIZATION", "GAME_STARTING". */
+  timerPhase: string;
+  yourTurn: boolean;
+  lockedKey: string | null;
+  hoverKey: string | null;
+  enemyPicksRemaining: number;
+}
+
+/** The `client.status` payload. `phase` is the gameflow phase verbatim, or "Offline". */
+export interface ClientStatus {
+  connected: boolean;
+  phase: string;
+  message?: string | null;
+}
+
+/** A champion on the board as the model should see it. */
+export interface PickRef {
+  championKey: string;
+  role: Role;
+}
+
+/** What the page sends with `recs.request` and `brief.request`. */
+export interface DraftSummary {
+  laneOpponent: PickRef | null;
+  enemyPicks: PickRef[];
+  allyPicks: PickRef[];
+  enemyPicksRemaining: number;
+  bans: string[];
+}
+
+export interface AppConfigView {
+  hasApiKey: boolean;
+  /** Empty unless the key is organisation-level and needs the workspace header. */
+  workspaceId: string;
+  model: string;
+  shortlistModel: string;
+  primaryRole: Role;
+  dataDragonVersion: string | null;
 }
 
 export interface NoteRecord {

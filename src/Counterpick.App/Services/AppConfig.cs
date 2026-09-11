@@ -16,8 +16,23 @@ public sealed class AppConfig
     /// </summary>
     public string? ApiKey { get; set; }
 
-    /// <summary>Model used for briefs. Sonnet is the latency/quality balance for champ select.</summary>
-    public string Model { get; set; } = "claude-sonnet-5";
+    /// <summary>
+    /// Only needed for an organisation-level key, which the API refuses without an
+    /// <c>anthropic-workspace-id</c> header. A key created inside a workspace needs none.
+    /// </summary>
+    public string? WorkspaceId { get; set; }
+
+    /// <summary>
+    /// Model for the full matchup brief. Read on the loading screen, so it can afford the
+    /// stronger model's extra seconds.
+    /// </summary>
+    public string Model { get; set; } = "claude-opus-5";
+
+    /// <summary>
+    /// Model for the ranked shortlist during pick phase, where the whole answer has to
+    /// land inside a 27-second timer. Sonnet is the latency choice.
+    /// </summary>
+    public string ShortlistModel { get; set; } = "claude-sonnet-5";
 
     /// <summary>The role you queue for. Drives which enemy pick counts as your lane opponent.</summary>
     public string PrimaryRole { get; set; } = "Top";
