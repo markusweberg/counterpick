@@ -63,7 +63,7 @@ export function topbar(): string {
       ? `<div class="clock"><span class="t ${state.yourTurn ? "hot" : ""}">${
           !state.live ? "—:——" : state.timerInfinite ? "∞" : clock(timerRemaining())
         }</span><span class="l">${clockLabel()}</span></div>`
-      : `<div class="clock"><span class="t" style="font-size:14px;color:var(--ink-2)">
+      : `<div class="clock"><span class="t" style="font-size:15px;color:var(--ink-2)">
            ${state.picked ? esc(champion(state.picked).name) : "—"}
            <span style="color:var(--ink-3)">vs</span>
            ${foe ? esc(champion(foe).name) : "—"}</span></div>`;
@@ -158,7 +158,7 @@ function foeLabel(): string {
 /** A champion's name on one line. Long names ("Nunu & Willump") drop a size rather than wrap. */
 function name(key: string): string {
   const n = champion(key).name;
-  return `<span class="nm ${n.length > 10 ? "long" : ""}">${esc(n)}</span>`;
+  return `<span class="nm ${n.length > 8 ? "long" : ""}">${esc(n)}</span>`;
 }
 
 export function board(): string {

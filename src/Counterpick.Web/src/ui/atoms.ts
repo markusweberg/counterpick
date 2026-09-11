@@ -31,7 +31,7 @@ export const VERDICT_COLOR: Record<Verdict, string> = {
 
 /** Beveled champion portrait. Empty slot when the key is null. */
 export function portrait(championKey: string | null, cls = ""): string {
-  if (!championKey) return `<div class="port empty ${cls}">·</div>`;
+  if (!championKey) return `<div class="port empty ${cls}"></div>`;
   const c = champion(championKey);
   return `<div class="port ${cls}"><img src="${squareUrl(c.key)}" alt="${esc(c.name)}" loading="lazy"></div>`;
 }
