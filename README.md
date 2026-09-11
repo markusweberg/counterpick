@@ -53,21 +53,26 @@ src/
     MainWindow.xaml(.cs)    Hosts WebView2; picks dev server vs packaged UI
     Services/
       AppPaths.cs           Where everything is written (%APPDATA%\Counterpick)
-      AppConfig.cs          API key, model, primary role
+      AppConfig.cs          API key, models, primary role
       Storage.cs            SQLite: your pool, notes and results
       BriefCache.cs         SQLite: Claude's briefs, disposable, separate file
       BackupService.cs      Snapshots, pruning, OneDrive mirror, restore
       DataTransfer.cs       JSON and Markdown export/import
+      ChampionCatalog.cs    Data Dragon champion list, numeric id <-> key
+      ClaudeClient.cs       The shortlist and brief calls, prompts and schemas
       Bridge.cs             The single JS <-> C# seam
+      Lcu/                  League client listener: locator, client, mapper, watcher
   Counterpick.Web/        Vite + TypeScript frontend
     src/
       main.ts               Entry: render loop and event delegation
       state.ts              App state and the draft/role rules
+      session.ts            Live draft, scoring, briefs, phase transitions
       bridge.ts             Typed client for Bridge.cs
+      champions.ts          Champion lookup backed by the catalog
       ddragon.ts            Champion art URLs
       types.ts              Domain model, mirrors the C# records
-      ui/                   chrome.ts (topbar, hero, board), views.ts, atoms.ts
-      data/scenario.ts      The worked example, until live data lands
+      ui/                   chrome.ts (topbar, hero, board), views.ts, settings.ts, data.ts, atoms.ts
+      data/scenario.ts      The worked example, shown only in a plain browser
       styles.css            Ported from the prototype
 tests/
   Counterpick.DataTests/  Data-safety checks over the real service sources
@@ -140,9 +145,11 @@ Destructive buttons confirm in place rather than opening a dialog.
 dotnet run --project tests/Counterpick.DataTests
 ```
 
-58 checks over the data-safety path: snapshots, WAL correctness, the OneDrive mirror,
+85 checks: the data-safety path (snapshots, WAL correctness, the OneDrive mirror,
 export, import idempotency, restore-without-loss, fresh-machine recovery, note editing
-and deletion, and the separation between your notes and the disposable cache. They run
+and deletion, the separation between your notes and the disposable cache) plus the pure
+half of the League client listener (endpoint parsing, the champion catalog, and the
+session-to-draft mapper against a captured-shape payload). They run
 against an isolated data directory via `COUNTERPICK_DATA_DIR`, and abort rather than
 touch the real profile if that redirection ever fails.
 
@@ -175,16 +182,30 @@ champions and art updates arrive without a rebuild.
 
 ## Status
 
-Working: the app builds, opens, renders all three phases, manages its own storage, and
-the Data panel reads the real database. Champion art comes from Data Dragon at runtime.
+Everything is built: the app opens, finds the League client when it is running, reads
+the draft live, ranks your pool through Claude, writes the brief when you lock, and
+manages its own storage. Settings holds the API key, your role, the models, and the
+champion pool per role.
 
-The draft views still run on the worked example in `data/scenario.ts` - blue side, top
-lane, pick B3, into Darius and Nidalee - because the two pieces that replace it are not
-built yet:
+The League client listener has been validated in a custom game and a real normal draft;
+captured payloads from both are test fixtures. The Claude calls are wired up but have
+not yet succeeded against a real key. The next priorities, in order, are in
+**[docs/REMAINING-WORK.md](docs/REMAINING-WORK.md)**: follow the role the client assigns
+you, have the app work out the enemy laner on its own, and a UI overhaul (the pool
+editor, the window chrome, the icon, and a design pass on the newer screens).
 
-- **`draft.subscribe`** - the League client listener
-- **`brief.request`** - the Claude client
+### How a game flows through it
 
-Both are stubbed in `Bridge.cs`. See **[docs/REMAINING-WORK.md](docs/REMAINING-WORK.md)**
-for the full handover: what is left, the LCU protocol detail needed to build it, and the
-decisions worth revisiting.
+1. **Client comes up.** The watcher polls for `LeagueClientUx.exe`, reads the port and
+   password off its command line, connects, and follows the gameflow phase in the topbar.
+2. **Champ select.** Every session update is mapped onto the board. Hovers are shown;
+   only locks change the lane opponent. When your lane opponent locks, the pool is sent
+   to Claude for a ranked shortlist, and the briefs for the top two come down in the
+   background.
+3. **You lock.** The brief view opens. Cached briefs are instant; a new one takes a few
+   seconds and lands on the loading screen.
+4. **Game ends.** The client's post-game phase moves the app to the after-game view.
+   Win or loss, one line of notes, and the next brief for that matchup includes it.
+
+If the client has the roles wrong, the dropdowns on the enemy board override it for the
+rest of that draft.
