@@ -23,7 +23,7 @@ secrets.json
 # Champion art is fetched from Data Dragon on first run and cached locally.
 # Notes/briefs live in a local SQLite file. Neither belongs in git.
 cache/
-data/
+/data/
 *.db
 *.db-shm
 *.db-wal
