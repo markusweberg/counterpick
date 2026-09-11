@@ -2,8 +2,9 @@
 
 Written 2026-09-11, at the end of the session that built the League client listener,
 the Claude client and the settings screen; updated later the same day by the session
-that built enemy-role inference. What follows is what is left, and the detail needed
-to pick each piece up cold.
+that built enemy-role inference, and again in the evening after the first real draft
+with a working key. What follows is what is left, and the detail needed to pick each
+piece up cold.
 
 ---
 
@@ -17,11 +18,11 @@ to pick each piece up cold.
 | Data panel | Done |
 | Champion catalog from Data Dragon | Done, cached per patch |
 | **Live draft from the League client** | Done, validated in a custom game and a real normal draft |
-| **Recommendations and briefs from Claude** | **Built; no successful call yet** (the key needs a workspace id, now a setting) |
+| **Recommendations and briefs from Claude** | Done, seen in a real draft 2026-09-11: 8 shortlists and 2 briefs, about 9 cents |
 | Settings: API key, workspace id, role, models, pool editor | Done; pool editor rebuilt 2026-09-11 (full roster, click to toggle) |
 | **UI pass: Settings and Data as panels, dark title bar, app icon** | Done 2026-09-11 |
 | **Following the role the client assigns you** | Done 2026-09-11, tested against the fixtures; not yet seen in a live autofill |
-| **Enemy roles from play rates, confirmed by the running game** | Done 2026-09-11, tested against the captured draft; not yet seen live |
+| **Enemy roles from play rates, confirmed by the running game** | Done 2026-09-11, seen live the same evening: every placement right, confirmed 8 s into loading |
 | Trace log under `%APPDATA%\Counterpick\logs` | Done: events, mapped drafts, Claude timings, raw payloads |
 | Tests | 143 checks, including real captured payloads and the play-rate snapshot |
 
@@ -161,25 +162,21 @@ works now:
 - Claude no longer guesses roles. The shortlist prompt and schema lost `enemyRoles`;
   each enemy pick now carries `guessed` so the model knows which placements are firm.
 
-Not yet seen live, in order of what to check in the trace log:
+Seen live on 2026-09-11 in a normal draft (trace `counterpick-20260911-195938.log`):
 
-1. `[roles] play rates ready: feed, patch 16.3` at startup (or `cache`; `bundled`
-   means the feed was unreachable - the URL is in `RoleRates.cs`). Seen once on
-   2026-09-11 with the client open: catalog, feed and websocket all came up within
-   two seconds of launch.
-2. `[roles] inferred [...]` after each enemy lock, with sensible roles and a confidence
-   that rises as their side fills in.
-3. `[game] positions confirmed: enemy[...]` shortly after the loading screen starts.
-   **Unverified assumption:** that the Live Client Data API answers during the loading
-   screen rather than only once the game clock runs. If it only answers in game, the
-   confirmed brief lands a minute later than hoped; the mitigation is already in place
-   (a settled guess is briefed on at lock, and the confirmation only re-requests when
-   it disagrees). If the poll never confirms, the first thing to check is whether the
-   `allPlayers` entries carry `riotId` or only `summonerName`; the mapper matches
-   either against `activePlayer`. Save a real `allgamedata` capture into the fixtures
-   in place of `allgamedata-synthetic.json`, which is hand-written from the docs.
-4. The dropdown correction: change a role by hand and the rest are re-placed around
-   it on the next `[roles] inferred` line, and the shortlist re-scores.
+1. `[roles] play rates ready: feed, patch 16.3` at startup, within a second of launch,
+   alongside the catalog and the websocket. (`cache` is the daily copy; `bundled`
+   means the feed was unreachable - the URL is in `RoleRates.cs`.)
+2. `[roles] inferred [...]` after every enemy lock, and every placement was right.
+   Miss Fortune went bot at 0.96 from the first pick; Yone mid started at 0.56 and
+   Tahm Kench support at 0.65 while Kayn was still undecided, and all five reached
+   0.94 or better once the last pick (Rumble top) landed - so the brief was requested
+   at lock on a settled lane, not held for the game.
+3. `[game] positions confirmed: enemy[...]` came 8 seconds after `GameStart`, during
+   the loading screen - so the Live Client Data API does answer before the clock runs.
+   The confirmation agreed with the guess. A real `allgamedata` capture in place of
+   `allgamedata-synthetic.json` is still worth saving from the next game.
+4. The dropdown correction was not exercised; nothing needed correcting.
 
 Tuning knobs, all constants: `RoleInference.Floor` (0.05), `MeleeBotFactor` (0.05),
 the class priors in `RoleInference.TagPriors`, and `LANE_SETTLED` (0.85). The test
@@ -216,6 +213,21 @@ Done 2026-09-11. What was reported, and what was done about it:
   the window. Regenerate it with a script if the mark changes; the source of truth is
   the description here, not a design file.
 
+Evening addendum, after the first real draft:
+
+- **The "Lock in" button did nothing** unless a card had been clicked first. The label
+  named the top recommendation as a fallback but the handler only acted on an explicit
+  selection. It now locks whatever the label names (`case "lock"` in `main.ts`). And
+  `applyLiveDraft` now re-locks when the client's lock differs from a hand lock, since
+  the client is the truth.
+- **Buttons restyled.** The gold button had borrowed the portraits' percentage bevel,
+  which on a wide button cut 30px off the sides and 6px off the top. All buttons now
+  share one shape with fixed 8px corner cuts (`--cut` / `--cut-in` in `styles.css`):
+  `.lock` is the single gold action with a gradient and highlight edge, `.ghost` draws
+  a gold frame as a clipped backdrop with the surface painted inside (a CSS border
+  would be sliced off by the clip), both press down on click. `.mini` and the steps
+  got the same gold hover and the active step an underline.
+
 The browser preview (`npm run dev`) now loads the real champion list straight from Data
 Dragon (`fetchCatalog()` in `ddragon.ts`), so the pool editor can be styled against all
 173 champions rather than the worked example's ten. The pool itself is not saved there.
@@ -229,7 +241,22 @@ mouse events (`Input.dispatchKeyEvent`, `Input.dispatchMouseEvent`) and take scr
 That is how the pool editor was reproduced and verified inside the app; use it whenever a
 bug only shows up hosted. Combine with `COUNTERPICK_DATA_DIR` for throwaway data.
 
-## 4. Watch a draft with a working key
+## 4. Watch a draft with a working key - done
+
+Done 2026-09-11, a normal draft as top (Jax into Rumble). Everything below checked out:
+the shortlist landed in 7 to 12 seconds every time, well inside the 25-second pick
+timer; scoring fired once per settled change (eight calls over a two-minute draft);
+the lock started the brief and both prefetched briefs (Jax and Mordekaiser) arrived
+before the loading screen ended. What the game found is written into section 2. Not
+exercised: autofill (the assigned role was the Settings role) and a hand correction.
+
+The cost of the game was about $0.09 on Sonnet 5: 5.6 K input, 7.0 K output, 4.0 K
+cache-write and 7.9 K cache-read tokens, output being three quarters of the bill.
+The brief ran on Sonnet because this machine's `config.json` predates the Opus
+default and keeps its old `model` value; the Settings dropdown shows what is actually
+configured, the browser preview does not.
+
+The original checklist, kept for the next time something changes underneath:
 
 Launch Counterpick, make sure Settings shows "Key set" (and the workspace id if the key
 is organisation-level), queue a normal draft, and watch the trace log in
@@ -280,7 +307,13 @@ Where to look if something is wrong:
 Anything learned here belongs in the test fixture, so the next change to the mapper
 is checked against a real shape rather than a guessed one.
 
-## 5. Validate the Claude calls with a real key
+## 5. Validate the Claude calls with a real key - done
+
+Done 2026-09-11, in the same draft as section 4. The shortlist answered in 7 to 12
+seconds with 440 to 740 input and 460 to 760 output tokens per call; the system prompt
+cached (1129 tokens written on the first call, read on the seven after). The briefs
+took 20 and 35 seconds with 970 and 1600 output tokens. The reasoning read well in the
+app. Nothing here needed tuning; the notes below are still the places to look.
 
 Add the key under Settings, add a pool, and either sit in a champ select or set an
 enemy role by hand on the board. The draft view then calls `recs.request`; locking

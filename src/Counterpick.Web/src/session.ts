@@ -180,7 +180,11 @@ export function applyLiveDraft(d: LiveDraft): void {
   state.yourTurn = d.yourTurn;
   state.hoverKey = d.hoverKey;
 
-  if (d.lockedKey && state.phase === "draft") lockIn(d.lockedKey);
+  // The client's lock is the truth. Follow it into the brief, and re-lock when the app
+  // was locked by hand on a different champion than the one that actually went through.
+  if (d.lockedKey && (state.phase === "draft" || (state.phase === "locked" && state.picked !== d.lockedKey))) {
+    lockIn(d.lockedKey);
+  }
   // Place the enemy side afresh; that ends in a re-score, or in the brief once locked.
   void inferRoles();
   rerender();

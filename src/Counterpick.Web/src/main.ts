@@ -307,9 +307,12 @@ app.addEventListener("click", (e) => {
 
   // ── session ─────────────────────────────────────────────────────────
   switch (action) {
-    case "lock":
-      if (state.selected) lockIn(state.selected);
+    case "lock": {
+      // The button names the top recommendation when nothing has been clicked; lock that.
+      const key = state.selected ?? state.recommendations[0]?.championKey;
+      if (key) lockIn(key);
       return;
+    }
     case "after":
       state.phase = "after";
       break;
