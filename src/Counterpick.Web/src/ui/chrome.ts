@@ -155,6 +155,12 @@ function foeLabel(): string {
   return `<span class="probable" title="${pct}% from play rates. Confirmed when the game starts.">Probably your lane opponent</span>`;
 }
 
+/** A champion's name on one line. Long names ("Nunu & Willump") drop a size rather than wrap. */
+function name(key: string): string {
+  const n = champion(key).name;
+  return `<span class="nm ${n.length > 10 ? "long" : ""}">${esc(n)}</span>`;
+}
+
 export function board(): string {
   const foe = laneOpponent();
 
@@ -164,7 +170,7 @@ export function board(): string {
         const shown = state.picked ?? (slot.hovering ? slot.championKey : null) ?? state.hoverKey;
         const status = state.picked ? "Locked" : shown ? "Hovering" : slot.onTheClock ? "Picking" : slot.role;
         return `<div class="slot you ${!state.picked && shown ? "hover" : ""}">${portrait(shown)}
-          <span class="nm">${shown ? esc(champion(shown).name) : "You"}</span>
+          ${shown ? name(shown) : `<span class="nm">You</span>`}
           <span class="rl">${status}</span></div>`;
       }
       if (!slot.championKey) {
@@ -172,7 +178,7 @@ export function board(): string {
           <span class="nm">${slot.onTheClock ? "Picking" : "Unpicked"}</span><span class="rl">${slot.role}</span></div>`;
       }
       return `<div class="slot ${slot.hovering ? "hover" : ""}">${portrait(slot.championKey)}
-        <span class="nm">${esc(champion(slot.championKey).name)}</span>
+        ${name(slot.championKey)}
         <span class="rl">${slot.hovering ? "Hovering" : slot.role}</span></div>`;
     })
     .join("");
@@ -188,7 +194,7 @@ export function board(): string {
       const key = slot.championKey;
       if (slot.hovering) {
         return `<div class="slot hover">${portrait(key)}
-          <span class="nm">${esc(champion(key).name)}</span>
+          ${name(key)}
           <span class="rl" style="color:var(--enemy)">Hovering</span></div>`;
       }
       const isLane = key === foe;
@@ -206,7 +212,7 @@ export function board(): string {
         ...ROLES.map((r) => `<option ${assigned === r ? "selected" : ""}>${r}${assigned === r && shaky ? "?" : ""}</option>`),
       ].join("");
       return `<div class="slot ${isLane ? "lane" : ""}">${portrait(key)}
-        <span class="nm">${esc(champion(key).name)}</span>
+        ${name(key)}
         <select class="rolesel ${isLane ? "is-lane" : ""} ${assigned ? "" : "unknown"} ${shaky ? "guess" : ""}" data-champ="${key}"
           title="${title}"
           aria-label="${esc(champion(key).name)} role">${options}</select></div>`;
