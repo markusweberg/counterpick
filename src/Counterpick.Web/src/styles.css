@@ -283,6 +283,11 @@ main.wide{width:100%;max-width:1320px;margin-inline:auto}
 .panel.foot .actions{align-items:center;gap:14px;margin-bottom:12px}
 .panel.foot .actions .subnote{flex:1 1 320px;margin:0}
 .versions{color:var(--ink-3)}
+/* The release folder is a long path next to a button: a row of its own, so the button
+   keeps its edge instead of landing mid-sentence when the path wraps. */
+.srcrow{display:flex;align-items:center;gap:10px;margin:0 0 8px}
+.srcrow code{font-family:var(--mono);font-size:13px;color:var(--ink-2);min-width:0;overflow-wrap:anywhere}
+.srcrow .mini{flex:none}
 
 .fieldrow{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin:0 0 8px}
 .fieldrow .grow{flex:1 1 220px;min-width:0}

@@ -144,9 +144,10 @@ function updatesPanel(): string {
       ${buttons}
       <span class="subnote">${updateLine()}</span>
     </div>
-    <p class="subnote versions">Releases are read from
-      ${u?.source ? `<code>${esc(u.source)}</code> <button class="mini" data-act="update-reveal">Open</button>` : "nowhere yet"}.
-      A newer version there is fetched on startup and applied when you restart.</p>
+    ${u?.source
+      ? `<div class="srcrow"><code>${esc(u.source)}</code><button class="mini" data-act="update-reveal">Open</button></div>
+    <p class="subnote versions">Releases are read from that folder. A newer version there is fetched on startup and applied when you restart.</p>`
+      : `<p class="subnote versions">No release folder yet, so nothing can be fetched on startup.</p>`}
   </section>`;
 }
 
