@@ -95,8 +95,14 @@ public partial class MainWindow : Window
         // The watcher emits through the bridge, so the bridge has to exist first. Its
         // constructor takes the watcher, so the watcher gets a forwarding lambda.
         _watcher = new LcuWatcher(_catalog, (name, payload) => _bridge?.Emit(name, payload));
-        _bridge = new Bridge(Web, _storage, _config, _backups, _briefs, _catalog, _watcher, _claude, _rates);
+        var updates = new UpdateService(_config, (name, payload) => _bridge?.Emit(name, payload));
+        _bridge = new Bridge(Web, _storage, _config, _backups, _briefs, _catalog, _watcher, _claude, _rates, updates);
         _watcher.Start();
+
+        // Fetch a newer version in the background so it is a one-click restart by the
+        // time you look. Only meaningful for an installed build; a bin/ build reports
+        // that and stops. A failure here is a line in Settings, never a dialog.
+        _ = Task.Delay(TimeSpan.FromSeconds(5)).ContinueWith(_ => updates.CheckAsync());
 
         // Warm the play-rate table so the first enemy pick is placed without waiting on
         // the network. Any failure falls back to the bundled snapshot inside the loader.

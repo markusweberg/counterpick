@@ -197,6 +197,23 @@ app.addEventListener("click", (e) => {
   if (action === "data") { void openData(); return; }
   if (action === "settings") { void openSettings(); return; }
 
+  // ── updates: reachable from the topbar as well as Settings ──────────
+  if (action === "update-check") { void call("update.check").catch(() => {}); return; }
+  if (action === "update-reveal") {
+    if (state.update?.source) void call("shell.reveal", { path: state.update.source }).catch(() => {});
+    return;
+  }
+  if (action === "update-restart") {
+    // The host hands over to the installer and this process ends. If it refuses, say so
+    // where the button is rather than doing nothing.
+    void call("update.restart").catch((e: unknown) => {
+      state.settings.flash = e instanceof Error ? e.message : String(e);
+      state.settings.flashError = true;
+      render();
+    });
+    return;
+  }
+
   // ── data panel ──────────────────────────────────────────────────────
   if (state.screen === "data") {
     const path = actionEl?.dataset.path ?? "";

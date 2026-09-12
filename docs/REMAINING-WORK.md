@@ -25,6 +25,7 @@ piece up cold.
 | **Enemy roles from play rates, confirmed by the running game** | Done 2026-09-11, seen live the same evening: every placement right, confirmed 8 s into loading |
 | Trace log under `%APPDATA%\Counterpick\logs` | Done: events, mapped drafts, Claude timings, raw payloads |
 | Tests | 143 checks, including real captured payloads and the play-rate snapshot |
+| **Installer and self-update** | Done 2026-09-12: Velopack, `tools/release.ps1`, Updates panel in Settings |
 
 The worked example in `src/Counterpick.Web/src/data/scenario.ts` now only appears in a
 plain browser (`npm run dev` outside the app). Inside the app everything starts empty and

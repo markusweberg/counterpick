@@ -77,6 +77,10 @@ export function topbar(): string {
       <div class="lcu"><span class="dot ${connected ? "" : "off"}"></span> ${clientLabel()}</div>
       ${right}
       <nav class="steps" aria-label="Screens">
+        ${state.update?.state === "ready"
+          ? `<button class="step upd" data-act="update-restart"
+               title="Version ${esc(state.update.available ?? "")} is downloaded. Restart to switch to it.">Update ready</button>`
+          : ""}
         <button class="step" data-act="settings" title="API key, role, models and pool"
           aria-current="${state.screen === "settings"}">Settings</button>
         <button class="step" data-act="data" title="Notes, backups and export"

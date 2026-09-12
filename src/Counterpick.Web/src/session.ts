@@ -12,7 +12,7 @@ import {
 } from "./state";
 import type {
   AppConfigView, Brief, CatalogChampion, ClientStatus, DraftSummary, GameRoles, LiveDraft, NoteRecord,
-  PickRef, Role, RoleInference, ShortlistResponse,
+  PickRef, Role, RoleInference, ShortlistResponse, UpdateView,
 } from "./types";
 
 let rerender: () => void = () => {};
@@ -44,6 +44,8 @@ export async function boot(): Promise<void> {
   on("draft.changed", (p) => applyLiveDraft(p as LiveDraft));
   on("draft.ended", () => endLiveDraft());
   on("game.roles", (p) => applyGameRoles(p as GameRoles));
+  on("update.state", (p) => { state.update = p as UpdateView; rerender(); });
+  state.update = await callOr<UpdateView | null>("update.status", null);
 
   // The watcher may have been running for a while; catch up on its current view.
   const snapshot = await callOr<{ status: ClientStatus; draft: LiveDraft | null } | null>(

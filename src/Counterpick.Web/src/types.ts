@@ -174,6 +174,20 @@ export interface AppConfigView {
   roleRatesSource: string;
 }
 
+/** Mirrors UpdateService.View(). Pushed as "update.state" whenever it changes. */
+export interface UpdateView {
+  version: string;
+  /** False for a build run from bin/, which cannot be swapped in place. */
+  installed: boolean;
+  /** The release folder the app watches; null when the build was never packed. */
+  source: string | null;
+  state: "idle" | "checking" | "up-to-date" | "downloading" | "ready" | "error" | "not-installed";
+  available: string | null;
+  progress: number;
+  error: string | null;
+  checkedAt: string | null;
+}
+
 export interface NoteRecord {
   id: number;
   body: string;

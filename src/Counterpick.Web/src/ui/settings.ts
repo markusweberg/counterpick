@@ -98,6 +98,58 @@ function poolPanel(): string {
   </section>`;
 }
 
+/* ── updates ─────────────────────────────────────────────────────────── */
+
+function updateLine(): string {
+  const u = state.update;
+  if (!u) return "Waiting for the host.";
+  switch (u.state) {
+    case "not-installed":
+      return "This copy runs from a build folder, so it cannot swap itself. Install it with the Setup from tools/release.ps1 to get updates here.";
+    case "checking":
+      return "Looking for a newer version…";
+    case "downloading":
+      return `Downloading ${esc(u.available ?? "")} · ${u.progress}%`;
+    case "ready":
+      return `Version ${esc(u.available ?? "")} is downloaded. Restart to switch to it; your notes and settings stay where they are.`;
+    case "up-to-date":
+      return `Up to date${u.checkedAt ? `, checked ${new Date(u.checkedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}.`;
+    case "error":
+      return esc(u.error ?? "The update check failed.");
+    default:
+      return "Not checked yet.";
+  }
+}
+
+function updatesPanel(): string {
+  const u = state.update;
+  const status = !isHosted
+    ? `<span class="pill warn">Browser preview</span>`
+    : !u
+      ? ""
+      : u.state === "ready"
+        ? `<span class="pill ok">Update ready</span>`
+        : u.installed
+          ? `<span class="pill ok">Installed</span>`
+          : `<span class="pill warn">Build folder</span>`;
+
+  const busy = u?.state === "checking" || u?.state === "downloading";
+  const buttons = u?.state === "ready"
+    ? `<button class="mini go" data-act="update-restart">Restart to update</button>`
+    : `<button class="mini" data-act="update-check" ${busy || !u?.installed ? "disabled" : ""}>Check for updates</button>`;
+
+  return `<section class="panel">
+    <div class="panel-head"><h3>Version ${esc(u?.version ?? "?")}</h3>${status}</div>
+    <div class="actions">
+      ${buttons}
+      <span class="subnote">${updateLine()}</span>
+    </div>
+    <p class="subnote versions">Releases are read from
+      ${u?.source ? `<code>${esc(u.source)}</code> <button class="mini" data-act="update-reveal">Open</button>` : "nowhere yet"}.
+      A newer version there is fetched on startup and applied when you restart.</p>
+  </section>`;
+}
+
 /* ── screen ──────────────────────────────────────────────────────────── */
 
 export function settingsView(): string {
@@ -165,7 +217,9 @@ export function settingsView(): string {
 
       ${poolPanel()}
 
-      <section class="panel span foot">
+      ${updatesPanel()}
+
+      <section class="panel foot">
         <div class="panel-head"><h3>Housekeeping</h3></div>
         <div class="actions">
           ${s.confirmClear

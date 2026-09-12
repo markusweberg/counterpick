@@ -40,6 +40,12 @@ public sealed class AppConfig
     /// <summary>Data Dragon patch the cached art belongs to. Empty means "fetch latest".</summary>
     public string? DataDragonVersion { get; set; }
 
+    /// <summary>
+    /// Folder (or URL) the installed app checks for newer versions. Empty means the one
+    /// baked in by tools/release.ps1; set it to move releases without repacking.
+    /// </summary>
+    public string? UpdateSource { get; set; }
+
     private static readonly JsonSerializerOptions Json = new()
     {
         WriteIndented = true,

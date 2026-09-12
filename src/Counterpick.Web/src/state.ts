@@ -1,6 +1,6 @@
 import type {
   AppConfigView, BackupInfo, BackupStatus, Brief, ClientStatus, DraftState, NoteRecord, Phase,
-  Recommendation, Role, RoleSource, StoredNote,
+  Recommendation, Role, RoleSource, StoredNote, UpdateView,
 } from "./types";
 import { ROLES } from "./types";
 import { isHosted } from "./bridge";
@@ -48,6 +48,8 @@ export interface AppState {
   data: DataState;
   settings: SettingsState;
   config: AppConfigView | null;
+  /** What the updater last said. Null until the host reports. */
+  update: UpdateView | null;
   phase: Phase;
   /**
    * The role being scored; decides which enemy pick is your lane opponent. Starts as the
@@ -142,6 +144,7 @@ export const state: AppState = {
   data: emptyDataState(),
   settings: emptySettingsState("Top"),
   config: null,
+  update: null,
   phase: "draft",
   role: "Top",
   assignedRole: null,

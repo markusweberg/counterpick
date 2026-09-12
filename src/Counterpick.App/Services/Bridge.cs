@@ -30,6 +30,7 @@ public sealed class Bridge
     private readonly LcuWatcher _watcher;
     private readonly ClaudeClient _claude;
     private readonly RoleRates _rates;
+    private readonly UpdateService _updates;
 
     private static readonly JsonSerializerOptions Json = new()
     {
@@ -39,7 +40,7 @@ public sealed class Bridge
 
     public Bridge(WebView2 web, Storage storage, AppConfig config, BackupService backups,
                   BriefCache briefs, ChampionCatalog catalog, LcuWatcher watcher, ClaudeClient claude,
-                  RoleRates rates)
+                  RoleRates rates, UpdateService updates)
     {
         _web = web;
         _storage = storage;
@@ -50,6 +51,7 @@ public sealed class Bridge
         _watcher = watcher;
         _claude = claude;
         _rates = rates;
+        _updates = updates;
         _web.WebMessageReceived += OnMessage;
     }
 
@@ -197,6 +199,13 @@ public sealed class Bridge
         "data.importDialog" => PickAndImport(),
 
         "shell.reveal" => Run(() => Reveal(Req(p, "path"))),
+
+        // ── updates ─────────────────────────────────────────────────────
+        "update.status" => _updates.View(),
+
+        "update.check" => _updates.CheckAsync(),
+
+        "update.restart" => Run(_updates.Restart),
 
         _ => throw new ArgumentException($"Unknown method '{method}'.")
     };

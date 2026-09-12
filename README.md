@@ -39,6 +39,34 @@ copies the result next to the exe.
 
 Skip the frontend step with `dotnet build -p:SkipFrontend=true`.
 
+## Installing it
+
+The app is packaged with [Velopack](https://velopack.io): a per-user install under
+`%LOCALAPPDATA%\Counterpick`, shortcuts on the desktop and in the Start Menu, an entry in
+Apps & features, and in-place updates. One script does the whole release:
+
+```
+.\tools\release.ps1
+```
+
+It bumps the patch number in the `.csproj` (or takes `-Version 1.2.0`), publishes a
+self-contained build, and packs it into `artifacts\releases`: `Counterpick-win-Setup.exe`
+for the first install, plus the full package and a delta from the previous release.
+Commit the version bump with the release.
+
+**The first time**, double-click the Setup. **Every time after that**, just run the script.
+The installed app looks in the release folder on startup, downloads a newer version in
+the background, and shows **Update ready** in the top bar; click it, or use
+Settings → Restart to update, and it relaunches on the new version. Settings also has
+Check for updates, the current version, and where releases are read from.
+
+The release folder is baked into each build by the script (`-Out` changes it; a OneDrive
+folder lets a second PC install and update from the same releases), and `updateSource` in
+`config.json` overrides it on one machine. A build started from `bin/` or Visual Studio is
+not an install, so it cannot update itself; Settings says so.
+
+Updating never touches `%APPDATA%\Counterpick`, and neither does uninstalling.
+
 ### Working on the UI
 
 For hot reload while styling, run the Vite dev server and start the app in Debug:
@@ -56,6 +84,7 @@ serves the built copy from `wwwroot/`. Release builds always use `wwwroot/`.
 Counterpick.sln
 src/
   Counterpick.App/        WPF host - the window, storage, and every external call
+    Program.cs              Entry point; runs the installer hook before WPF starts
     MainWindow.xaml(.cs)    Hosts WebView2; picks dev server vs packaged UI
     Services/
       AppPaths.cs           Where everything is written (%APPDATA%\Counterpick)
@@ -69,6 +98,7 @@ src/
       RoleInference.cs      Places the enemy side into roles, with a confidence
       ClaudeClient.cs       The shortlist and brief calls, prompts and schemas
       Bridge.cs             The single JS <-> C# seam
+      UpdateService.cs      Watches the release folder, downloads, offers a restart
       Lcu/                  League client listener: locator, client, mapper, watcher,
                             and the running game's player list for confirmed positions
     Resources/              The bundled play-rate snapshot
@@ -87,7 +117,7 @@ src/
 tests/
   Counterpick.DataTests/  Data-safety checks over the real service sources
 prototype/                Design reference - the approved UI as a standalone page
-tools/                    Build and asset scripts
+tools/                    release.ps1 builds and packs an installer; asset scripts
 ```
 
 ## Your data

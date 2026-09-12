@@ -8,6 +8,17 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>Counterpick.App</RootNamespace>
     <AssemblyName>Counterpick</AssemblyName>
+    <!-- Bumped by tools/release.ps1; Velopack compares this to decide what is an update. -->
+    <Version>1.0.1</Version>
+    <!-- Program.cs replaces the Main that App.xaml would generate; see the note there. -->
+    <StartupObject>Counterpick.App.Program</StartupObject>
+    <!-- English only; WPF would otherwise publish a dozen locale folders nobody reads. -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!--
+      Where the installed app looks for newer versions. tools/release.ps1 passes the
+      folder it packs into, so a release knows where its successors will be.
+    -->
+    <UpdateSource Condition="'$(UpdateSource)' == ''"></UpdateSource>
     <!-- The exe's icon: Explorer, the taskbar and the title bar pick it up from the binary. -->
     <ApplicationIcon>Resources\counterpick.ico</ApplicationIcon>
     <!-- The Vite frontend lives beside this project and is built into it. -->
@@ -17,10 +28,12 @@
   <ItemGroup>
     <!-- Also packed as a WPF resource so MainWindow.xaml can name it in Icon="...". -->
     <Resource Include="Resources\counterpick.ico" />
+    <AssemblyMetadata Include="UpdateSource" Value="$(UpdateSource)" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Anthropic" Version="12.47.0" />
+    <PackageReference Include="Velopack" Version="1.2.0" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
     <PackageReference Include="System.Management" Version="10.0.12" />
