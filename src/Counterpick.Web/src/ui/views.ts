@@ -150,6 +150,27 @@ function notice(title: string, body: string, action = "", tone: "quiet" | "warn"
   return `<div class="notice ${tone}"><h3>${title}</h3>${body ? `<p>${body}</p>` : ""}${action}</div>`;
 }
 
+/**
+ * Between drafts there is no assigned role, so there is no pool to show: which pool gets
+ * ranked is decided by the role the client gives you when champ select opens, autofill
+ * included. Listing the default role's champions here would invite a pick for a lane you
+ * may not end up in, so the screen says what it is waiting for instead.
+ */
+function idleView(): string {
+  const role = state.role.toLowerCase();
+  const n = state.pool.length;
+  const pool = `${n} champion${n === 1 ? "" : "s"} in your ${role} pool`;
+  const edit = `<button class="ghost" data-act="settings">Edit your pool</button>`;
+
+  return state.client.connected
+    ? notice("Waiting for champ select",
+        `${pool}, ready. Nothing is ranked yet: the role comes from the client when the draft
+         opens, and the pool scored is that role's.`, edit)
+    : notice("League client not running",
+        `${pool}. Start the client and the draft appears here as it happens, scored for
+         whichever role you are given.`, edit);
+}
+
 export function draftView(): string {
   const foe = laneOpponent();
   const banned = state.pool.filter((k) => state.draft.bans.includes(k));
@@ -186,16 +207,13 @@ export function draftView(): string {
             `<button class="ghost" data-act="settings">Build your pool</button>`)
       : notice("Nothing left to pick",
           `Every champion in your pool is banned or already taken. Your pool: ${state.pool.map((k) => esc(champion(k).name)).join(", ")}.`);
+  } else if (blocker === "enemy" && !state.live) {
+    body = idleView();
   } else if (blocker === "enemy") {
     const cards = availablePool().map(unscoredCard).join("");
-    const waiting = state.live
-      ? "Nothing locked on their side yet. The pool is scored the moment their first pick lands, and again as more come in."
-      : state.client.connected
-        ? "Open a champ select in the League client and the draft appears here."
-        : "Start the League client and the draft appears here as it happens.";
     body = `<div class="bar"><div>
         <p class="eyebrow">${poolLabel()} · waiting for enemy picks</p>
-        <p class="subnote">${borrowedNote()}${waiting} The client does not say who plays where; each pick is placed from how often it is played in each role, and you can correct it on the board.</p>
+        <p class="subnote">${borrowedNote()}Nothing locked on their side yet. The pool is scored the moment their first pick lands, and again as more come in. The client does not say who plays where; each pick is placed from how often it is played in each role, and you can correct it on the board.</p>
       </div></div>
       <div class="recs">${cards}</div>`;
   } else if (state.scoring === "error") {
