@@ -33,6 +33,8 @@
     <!-- Enemy role inference: the play-rate table and the pure placement. -->
     <Compile Include="..\..\src\Counterpick.App\Services\RoleRates.cs" />
     <Compile Include="..\..\src\Counterpick.App\Services\RoleInference.cs" />
+    <!-- The open field offered to the shortlist: catalog plus play rates, no model call. -->
+    <Compile Include="..\..\src\Counterpick.App\Services\OpenPool.cs" />
   </ItemGroup>
 
   <ItemGroup>

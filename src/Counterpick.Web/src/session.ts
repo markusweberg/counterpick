@@ -124,6 +124,7 @@ export function applyLiveDraft(d: LiveDraft): void {
     state.result = null;
     state.selected = null;
     state.recommendations = [];
+    state.openPicks = [];
     state.scoredFor = null;
     state.scoring = "idle";
     state.roleSource = {};
@@ -305,6 +306,7 @@ export function newDraft(): void {
     followRole(state.config?.primaryRole ?? state.role);
     state.draft = emptyDraft(state.role);
     state.recommendations = [];
+    state.openPicks = [];
     state.scoredFor = null;
     state.selected = null;
     state.roleSource = {};
@@ -422,6 +424,7 @@ export async function rescore(force = false): Promise<void> {
     if (state.scoredFor !== fp) return; // a newer draft came in while we waited
 
     state.recommendations = res.recommendations;
+    state.openPicks = res.openPicks ?? [];
     state.records = res.records;
     if (!state.selected || !res.recommendations.some((r) => r.championKey === state.selected)) {
       state.selected = res.recommendations[0]?.championKey ?? null;
@@ -468,6 +471,7 @@ function followRole(role: Role): void {
   if (role === state.role && !state.poolLoading) return;
   setRole(role);
   state.recommendations = [];
+  state.openPicks = [];
   state.selected = null;
   state.scoredFor = null;
   state.scoring = "idle";

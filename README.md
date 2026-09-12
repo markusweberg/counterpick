@@ -11,13 +11,18 @@ often each champion is played in each position (a public play-rate table, refres
 per patch), says "probably" until it is sure, and lets the running game confirm before
 the brief is trusted.
 
+The shortlist answers "which of mine is best here", which is the question on the clock.
+Under it the same call answers the one that hides: the three strongest picks in the role
+from every champion played there this patch, scored on the same scale, so you can see
+whether the draft wanted something you do not play - and whether the gap is worth it.
+
 Single-user, local-first. There is no server and no account.
 
 ## The three moments
 
 | Phase | You need | The app shows |
 |---|---|---|
-| **Draft** | "Who do I take?" | Your pool re-scored live against the enemy picks, with one-line reasoning |
+| **Draft** | "Who do I take?" | Your pool re-scored live against the enemy picks, with one-line reasoning, and under it the best picks in the role from the whole roster |
 | **Locked in** | "What do I need to know?" | Lane beats, kill windows, jungle tracking, your job in the team comp |
 | **After the game** | "What did I learn?" | A note that gets folded into the next brief for this matchup |
 
@@ -96,6 +101,7 @@ src/
       ChampionCatalog.cs    Data Dragon champion list, numeric id <-> key
       RoleRates.cs          Per-position play rates, cached daily, with a bundled snapshot
       RoleInference.cs      Places the enemy side into roles, with a confidence
+      OpenPool.cs           The champions played in a role this patch, for the pool-blind picks
       ClaudeClient.cs       The shortlist and brief calls, prompts and schemas
       Bridge.cs             The single JS <-> C# seam
       UpdateService.cs      Watches the release folder, downloads, offers a restart
@@ -185,11 +191,12 @@ Destructive buttons confirm in place rather than opening a dialog.
 dotnet run --project tests/Counterpick.DataTests
 ```
 
-115 checks: the data-safety path (snapshots, WAL correctness, the OneDrive mirror,
+152 checks: the data-safety path (snapshots, WAL correctness, the OneDrive mirror,
 export, import idempotency, restore-without-loss, fresh-machine recovery, note editing
 and deletion, the separation between your notes and the disposable cache) plus the pure
 half of the League client listener (endpoint parsing, the champion catalog, and the
-session-to-draft mapper against a captured-shape payload). They run
+session-to-draft mapper against a captured-shape payload, and the open field a role
+offers). They run
 against an isolated data directory via `COUNTERPICK_DATA_DIR`, and abort rather than
 touch the real profile if that redirection ever fails.
 
@@ -208,7 +215,7 @@ champions and art updates arrive without a rebuild.
   from the client's `lockfile`. This is the local client API, not the public Riot API,
   and needs no developer key.
 - **Recommendations and briefs** — the Claude API, prompted with your pool, the enemy
-  comp, and your own saved notes.
+  comp, the champions played in your role this patch, and your own saved notes.
 
 ## Decisions so far
 
@@ -243,8 +250,9 @@ design pass on the newer screens).
    the hero banner, and an autofilled role with no pool of its own borrows the pool of
    the role under Settings. Every session update is mapped onto the board. Hovers are
    shown; only locks change the lane opponent. When your lane opponent locks, the pool
-   is sent to Claude for a ranked shortlist, and the briefs for the top two come down
-   in the background.
+   is sent to Claude for a ranked shortlist - along with the champions played in your
+   role this patch, so the same answer includes the best picks outside your pool - and
+   the briefs for the top two come down in the background.
 3. **You lock.** The brief view opens. Cached briefs are instant; a new one takes a few
    seconds and lands on the loading screen.
 4. **Game ends.** The client's post-game phase moves the app to the after-game view.

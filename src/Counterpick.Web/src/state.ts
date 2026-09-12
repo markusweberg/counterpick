@@ -4,7 +4,7 @@ import type {
 } from "./types";
 import { ROLES } from "./types";
 import { isHosted } from "./bridge";
-import { INITIAL_DRAFT, RECOMMENDATIONS, SEED_NOTES, SEED_RECORDS } from "./data/scenario";
+import { INITIAL_DRAFT, OPEN_PICKS, RECOMMENDATIONS, SEED_NOTES, SEED_RECORDS } from "./data/scenario";
 
 /** Which screen is showing. The three phases live inside "session". */
 export type Screen = "session" | "data" | "settings";
@@ -82,6 +82,12 @@ export interface AppState {
   /** How sure the placement is, 0-1, per enemy champion. 1 for anything fixed. */
   roleConfidence: Record<string, number>;
   recommendations: Recommendation[];
+  /**
+   * The best picks in the role regardless of your pool, from the same call. Read when
+   * the shortlist's own best is mediocre: it says whether the draft wanted something
+   * you do not play.
+   */
+  openPicks: Recommendation[];
   scoring: ScoringStatus;
   scoringError: string | null;
   /** Fingerprint of the inputs the current recommendations were scored on. */
@@ -159,6 +165,7 @@ export const state: AppState = {
   roleSource: example ? { Darius: "client", Nidalee: "client" } : {},
   roleConfidence: {},
   recommendations: example ? RECOMMENDATIONS : [],
+  openPicks: example ? OPEN_PICKS : [],
   scoring: "idle",
   scoringError: null,
   scoredFor: null,
@@ -206,8 +213,16 @@ export function laneSettled(): boolean {
   return laneOpponent() !== null && laneConfidence() >= LANE_SETTLED;
 }
 
+/** The score on the board for a champion: from your pool's shortlist, else the open picks. */
 export function recommendationFor(championKey: string): Recommendation | undefined {
-  return state.recommendations.find((r) => r.championKey === championKey);
+  return state.recommendations.find((r) => r.championKey === championKey)
+    ?? state.openPicks.find((r) => r.championKey === championKey);
+}
+
+/** Your pool's best score against the draft, and the best on the board. Zero when unscored. */
+export function bestScores(): { pool: number; open: number } {
+  const top = (list: Recommendation[]) => list.reduce((n, r) => Math.max(n, r.score), 0);
+  return { pool: top(state.recommendations), open: top(state.openPicks) };
 }
 
 /** The champion the hero banner shows: your lock, else your pick, else your hover. */

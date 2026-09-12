@@ -282,6 +282,9 @@ public sealed class Bridge
     /// <summary>
     /// Payload: { role, championKeys[], draft }. Names, classes, notes and records are
     /// filled in here rather than trusted from the page - the page only knows keys.
+    ///
+    /// Answers two questions in one call: how the player's pool ranks, and what the best
+    /// pick in the role would be if the pool were no object (see <see cref="OpenPool"/>).
     /// </summary>
     private async Task<object?> RecommendAsync(JsonNode? p)
     {
@@ -291,18 +294,38 @@ public sealed class Bridge
         var keys = p?["championKeys"]?.AsArray().Select(n => n!.GetValue<string>()).ToList() ?? [];
 
         var pool = keys.Select(k => CandidateFor(k, draft.LaneOpponent?.ChampionKey, role)).ToList();
+        var open = await OpenFieldFor(draft, role, keys);
         Trace.Write("claude", $"shortlist requested: {role} vs {draft.LaneOpponent?.ChampionKey ?? "?"}, pool [{string.Join(",", keys)}], " +
-                              $"enemy [{string.Join(",", draft.EnemyPicks.Select(p => p.ChampionKey))}], ally [{string.Join(",", draft.AllyPicks.Select(p => p.ChampionKey))}]");
+                              $"enemy [{string.Join(",", draft.EnemyPicks.Select(p => p.ChampionKey))}], ally [{string.Join(",", draft.AllyPicks.Select(p => p.ChampionKey))}], " +
+                              $"open field {open.Count}");
         var started = System.Diagnostics.Stopwatch.StartNew();
-        var result = await _claude.ShortlistAsync(draft, pool);
+        var result = await _claude.ShortlistAsync(draft, pool, open);
         Trace.Write("claude", $"shortlist ready in {started.ElapsedMilliseconds}ms: " +
-                              $"{string.Join(" ", result.Recommendations.Select(r => $"{r.ChampionKey}={r.Score}"))}");
+                              $"{string.Join(" ", result.Recommendations.Select(r => $"{r.ChampionKey}={r.Score}"))} | " +
+                              $"open {string.Join(" ", result.OpenPicks.Select(r => $"{r.ChampionKey}={r.Score}"))}");
 
         return new
         {
             recommendations = result.Recommendations,
+            openPicks = result.OpenPicks,
             records = pool.ToDictionary(c => c.ChampionKey, c => new { wins = c.Wins, losses = c.Losses })
         };
+    }
+
+    /// <summary>
+    /// Every champion played in the role this patch that is still available, for the
+    /// pool-blind half of the shortlist. An unreachable play-rate feed means no open
+    /// field rather than a guessed one; the pool shortlist is unaffected either way.
+    /// </summary>
+    private async Task<List<OpenCandidate>> OpenFieldFor(DraftContext draft, string role, IReadOnlyList<string> pool)
+    {
+        await _rates.EnsureLoadedAsync();
+        if (!_rates.IsLoaded) return [];
+
+        var taken = draft.Bans
+            .Concat(draft.EnemyPicks.Select(x => x.ChampionKey))
+            .Concat(draft.AllyPicks.Select(x => x.ChampionKey));
+        return OpenPool.For(_catalog, _rates, role, taken, pool);
     }
 
     /// <summary>

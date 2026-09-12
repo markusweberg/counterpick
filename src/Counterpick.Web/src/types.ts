@@ -103,6 +103,11 @@ export interface GameRoles {
 /** What `recs.request` returns. */
 export interface ShortlistResponse {
   recommendations: Recommendation[];
+  /**
+   * The best picks in the role from the whole roster, pool or not, scored on the same
+   * scale as `recommendations`. Empty when the play-rate table has not loaded.
+   */
+  openPicks: Recommendation[];
   records: Record<string, MatchupRecord>;
 }
 

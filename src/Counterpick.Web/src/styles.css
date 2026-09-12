@@ -162,6 +162,14 @@ main{flex:1;padding:18px 20px 44px}
 .chip{display:inline-block;font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.11em;text-transform:uppercase;padding:2px 7px;border:1px solid currentColor}
 .d-fav{color:var(--fav)}.d-even{color:var(--even)}.d-hard{color:var(--hard)}.d-lose{color:var(--lose)}
 .badge1{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);background:var(--gold-wash);padding:3px 7px}
+/* The open field: the same cards, sunk a shade and badged in ally blue, so the gold
+   "Recommended" stays the one pick the app is actually telling you to make. */
+.open-bar{margin-top:28px;padding-top:18px;border-top:1px solid var(--line-hard)}
+.recs.open .rec{background:var(--sunk)}
+.recs.open .rec:hover{background:var(--surface)}
+.recs.open .rec[aria-pressed="true"]{background:var(--surface)}
+.badge-open{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ally);background:#5AA9DC1A;padding:3px 7px}
+.badge-pool{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);border:1px solid var(--line-hard);padding:2px 6px}
 .rec .why{font-size:14px;line-height:1.45;color:var(--ink);margin:0 0 10px;text-wrap:pretty}
 .hints{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}
 .hints li{font-size:13px;line-height:1.4;color:var(--ink-3);padding-left:12px;position:relative}

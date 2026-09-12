@@ -236,6 +236,45 @@ export const RECOMMENDATIONS: Recommendation[] = [
   },
 ];
 
+/**
+ * The pool-blind half of the same answer: the best top laners on the board for this
+ * draft, whether or not they are played. Inside the app these come back from the same
+ * Claude call as the shortlist, scored on the same scale - here the gap is four points,
+ * which is the case the section is for: the pool is fine, and you can see that it is.
+ */
+export const OPEN_PICKS: Recommendation[] = [
+  {
+    championKey: "Kennen",
+    score: 96,
+    verdict: "Favorable",
+    why: "Ranged into a juggernaut, and a third AoE ult that converts Sejuani's engage instead of repeating it.",
+    hints: [
+      "Darius cannot reach him before 6",
+      "R after Sejuani R is the whole fight",
+    ],
+  },
+  {
+    championKey: "Gwen",
+    score: 92,
+    verdict: "Favorable",
+    why: "Your own pick is the second best on the board — nothing outside your pool beats it by much.",
+    hints: [
+      "Already in your pool, already ranked first",
+      "Only four points off the open best",
+    ],
+  },
+  {
+    championKey: "Jayce",
+    score: 88,
+    verdict: "Favorable",
+    why: "Wins the lane outright and gives the comp poke, but he falls off in the 5v5 this team wants.",
+    hints: [
+      "Beats Darius at every level",
+      "Weakest of the three once fights start",
+    ],
+  },
+];
+
 /** Seeded notes so the notes feature is visible before any game has been played. */
 export const SEED_NOTES: Record<string, { id: number; body: string; createdAt: string }[]> = {
   "Gwen|Darius|Top": [

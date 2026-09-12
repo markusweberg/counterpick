@@ -2,7 +2,9 @@
 
 import { isHosted } from "../bridge";
 import { champion } from "../champions";
-import { briefFor, laneConfidence, laneOpponent, laneSettled, notesFor, poolBorrowed, state } from "../state";
+import {
+  bestScores, briefFor, laneConfidence, laneOpponent, laneSettled, notesFor, poolBorrowed, state,
+} from "../state";
 import { availablePool, scoringBlocker } from "../session";
 import type { NoteRecord, Recommendation } from "../types";
 import { esc, portrait, recordLabel, rich, VERDICT_CLASS, VERDICT_COLOR } from "./atoms";
@@ -36,6 +38,64 @@ function card(rec: Recommendation, i: number): string {
     <p class="why">${esc(rec.why)}</p>
     <ul class="hints">${hints}</ul>
   </div>`;
+}
+
+/**
+ * One open pick: the same card, marked for where it came from. Clickable like the rest,
+ * so an out-of-pool pick can still be locked and briefed - the app records what you
+ * actually played, not only what you practise.
+ */
+function openCard(rec: Recommendation, i: number): string {
+  const c = champion(rec.championKey);
+  const mine = state.pool.includes(rec.championKey);
+  const hints = rec.hints.map((h) => `<li>${esc(h)}</li>`).join("");
+  return `<div class="rec" role="button" tabindex="0"
+      aria-pressed="${state.selected === rec.championKey}" data-pick="${rec.championKey}">
+    <span class="rec-top">${portrait(rec.championKey)}
+      <span class="rec-id">
+        <span class="nm">${esc(c.name)}</span>
+        <span class="cls">${esc(c.klass)}${mine ? ` · ${recordLabel(state.records[rec.championKey])}` : ""}</span>
+      </span>
+      <span class="score">${rec.score}</span>
+    </span>
+    <span class="meter"><i style="width:${rec.score}%;background:${VERDICT_COLOR[rec.verdict]}"></i></span>
+    <span class="rec-chips">
+      <span class="chip ${VERDICT_CLASS[rec.verdict]}">${rec.verdict}</span>
+      ${mine ? '<span class="badge-pool">In your pool</span>' : i === 0 ? '<span class="badge-open">Best on the board</span>' : ""}
+    </span>
+    <p class="why">${esc(rec.why)}</p>
+    <ul class="hints">${hints}</ul>
+  </div>`;
+}
+
+/**
+ * What the draft is asking for, pool or no pool. The shortlist answers "which of mine",
+ * which is the question on the clock; this answers the one it hides - whether the right
+ * pick here is a champion you do not play. Only shown once the pool itself is scored,
+ * and never instead of it.
+ */
+function openSection(): string {
+  if (state.openPicks.length === 0) return "";
+  const { pool, open } = bestScores();
+  const gap = open - pool;
+  const top = state.openPicks[0]!;
+  const name = esc(champion(top.championKey).name);
+
+  const reading =
+    state.pool.includes(top.championKey)
+      ? `${name} is the best pick on the board and you already play it.`
+      : gap >= 10
+      ? `${name} is ${gap} points clear of anything you play. This draft wants something outside your pool.`
+      : gap >= 4
+      ? `${name} is ${gap} points above your best, which is worth knowing and not worth first-timing.`
+      : `Your pool covers this draft: nothing on the board beats it by more than ${Math.max(gap, 0)}.`;
+
+  return `<div class="bar open-bar"><div>
+      <p class="eyebrow">Best in ${state.role.toLowerCase()} · any champion</p>
+      <p class="subnote">${reading} Scored on the same scale as your pool, against the same
+        draft, from the champions actually played in ${state.role.toLowerCase()} this patch.</p>
+    </div></div>
+    <div class="recs open">${state.openPicks.map(openCard).join("")}</div>`;
 }
 
 /** The pool before there is anything to score it against. */
@@ -161,7 +221,8 @@ export function draftView(): string {
           <button class="lock" data-act="lock">Lock in ${esc(champion(selected).name)}</button>
         </div>
       </div>
-      <div class="recs">${cards}</div>`;
+      <div class="recs">${cards}</div>
+      ${openSection()}`;
   }
 
   const bans = banned.length

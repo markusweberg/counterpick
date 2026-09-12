@@ -32,8 +32,16 @@ public sealed record Candidate(
 /// <summary>Mirrors Recommendation in types.ts, minus the brief, which is a separate call.</summary>
 public sealed record ShortlistEntry(string ChampionKey, int Score, string Verdict, string Why, List<string> Hints);
 
-/// <summary>The ranked pool. Enemy roles are the app's business (see RoleInference), not the model's.</summary>
-public sealed record ShortlistResult(List<ShortlistEntry> Recommendations);
+/// <summary>
+/// The ranked pool, plus the best picks in the role from the whole roster. Enemy roles
+/// are the app's business (see RoleInference), not the model's.
+/// </summary>
+/// <param name="OpenPicks">
+/// Scored on the same 0-100 scale as <paramref name="Recommendations"/>, so the gap
+/// between the best champion the player plays and the best champion on the board is
+/// readable at a glance. Empty when no open field was offered.
+/// </param>
+public sealed record ShortlistResult(List<ShortlistEntry> Recommendations, List<ShortlistEntry> OpenPicks);
 
 public sealed record LaneBeat(string Mark, string Text);
 public sealed record SetupDto(string Keystone, string Secondary, string Summoners, string First);
@@ -90,36 +98,59 @@ public sealed class ClaudeClient
             : client.WithOptions(o => { o.ExtraHeaders = headers; return o; });
     }
 
-    /// <summary>Rank the whole pool against the current draft. Fast path.</summary>
+    /// <summary>
+    /// Rank the whole pool against the current draft, and the open field alongside it.
+    /// Fast path.
+    /// </summary>
+    /// <param name="openPool">
+    /// Champions played in the role this patch, pool or not (see <see cref="OpenPool"/>).
+    /// Both answers come from one call on purpose: asked together the scores are
+    /// calibrated against each other, which is the whole point of showing them side by
+    /// side, and it costs one round trip rather than two under a pick timer. Pass an
+    /// empty list to skip the open picks.
+    /// </param>
     public async Task<ShortlistResult> ShortlistAsync(DraftContext draft, IReadOnlyList<Candidate> pool,
+                                                      IReadOnlyList<OpenCandidate> openPool,
                                                       CancellationToken ct = default)
     {
         if (pool.Count == 0) throw new InvalidOperationException("Your pool is empty. Add champions under Settings.");
 
-        var context = JsonSerializer.Serialize(new { draft, pool }, Wire);
-        var text = await Complete(_config.ShortlistModel, Effort.Low, 4096, ShortlistSystem, ShortlistSchema,
-            $"Rank my pool for this draft. Score and explain every champion in `pool`.\n\n```json\n{context}\n```", ct);
+        var context = JsonSerializer.Serialize(new { draft, pool, openPool }, Wire);
+        var text = await Complete(_config.ShortlistModel, Effort.Low, 6144, ShortlistSystem, ShortlistSchema,
+            $"Rank my pool for this draft. Score and explain every champion in `pool`, then name the best picks in `openPool`.\n\n```json\n{context}\n```", ct);
 
         var parsed = JsonSerializer.Deserialize<ShortlistResponse>(text, Wire)
                      ?? throw new InvalidOperationException("Claude returned an empty shortlist.");
 
         // Keep the contract honest even if the model drops or invents a champion.
         var allowed = pool.Select(p => p.ChampionKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var list = parsed.Recommendations
-            .Where(r => allowed.Contains(r.ChampionKey))
-            .Select(r => r with
-            {
-                Score = Math.Clamp(r.Score, 0, 100),
-                Verdict = NormaliseVerdict(r.Verdict),
-                Hints = r.Hints.Take(3).ToList()
-            })
-            .OrderByDescending(r => r.Score)
-            .ToList();
+        var list = Clean(parsed.Recommendations, allowed);
 
         if (list.Count == 0) throw new InvalidOperationException("Claude's shortlist matched none of your pool.");
 
-        return new ShortlistResult(list);
+        // The open picks are a bonus, not the answer: anything outside the offered field
+        // is dropped and the shortlist still stands on its own.
+        var open = Clean(parsed.OpenPicks, openPool.Select(c => c.ChampionKey).ToHashSet(StringComparer.OrdinalIgnoreCase))
+            .Take(3)
+            .ToList();
+
+        return new ShortlistResult(list, open);
     }
+
+    /// <summary>Drop what was never offered, clamp the score, agree the verdict, trim the hints.</summary>
+    private static List<ShortlistEntry> Clean(List<ShortlistEntry>? entries, HashSet<string> allowed) =>
+        (entries ?? [])
+        .Where(r => allowed.Contains(r.ChampionKey))
+        .GroupBy(r => r.ChampionKey, StringComparer.OrdinalIgnoreCase)
+        .Select(g => g.First())
+        .Select(r => r with
+        {
+            Score = Math.Clamp(r.Score, 0, 100),
+            Verdict = NormaliseVerdict(r.Verdict),
+            Hints = r.Hints.Take(3).ToList()
+        })
+        .OrderByDescending(r => r.Score)
+        .ToList();
 
     /// <summary>The full matchup brief for one champion into one opponent. Slow path.</summary>
     public async Task<BriefDto> BriefAsync(DraftContext draft, Candidate me, PickInfo opponent,
@@ -182,7 +213,7 @@ public sealed class ClaudeClient
         _ => "Even"
     };
 
-    private sealed record ShortlistResponse(List<ShortlistEntry> Recommendations);
+    private sealed record ShortlistResponse(List<ShortlistEntry> Recommendations, List<ShortlistEntry>? OpenPicks);
 
     // ── prompts ──────────────────────────────────────────────────────────
 
@@ -229,6 +260,21 @@ public sealed class ClaudeClient
         Score against `laneOpponent` when it is given. When it is null nobody on the enemy
         side has been placed in the player's role yet: score on the team fit and on what
         the hidden picks could be, and say so in `why`.
+
+        Then fill `openPicks`: the three strongest picks for this draft from `openPool`,
+        ignoring the player's pool entirely. This answers the other question - what the
+        draft is asking for, whether or not the player plays it - so judge it on the draft
+        alone: the lane, the enemy comp, and what the allied picks still lack (frontline,
+        engage, disengage, waveclear, a damage type their comp is missing). Score on the
+        same 0-100 scale as the pool, so the gap between the best champion the player
+        plays and the best champion on the board is honest; when it is small, say so.
+        `why` is one sentence, `hints` two fragments.
+
+        `openPool` is what is played in that role on this patch: `playRate` is its share
+        of games there, low meaning off-meta, and `inPool` marks the ones the player
+        already plays. Name an `inPool` champion when it really is one of the three best -
+        agreeing with the shortlist is a useful answer. Use `championKey` verbatim and
+        never a champion outside `openPool`. If `openPool` is empty, return an empty array.
         """;
 
     private const string BriefSystem = Persona + """
@@ -260,9 +306,24 @@ public sealed class ClaudeClient
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["recommendations"],
+          "required": ["recommendations", "openPicks"],
           "properties": {
             "recommendations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["championKey", "score", "verdict", "why", "hints"],
+                "properties": {
+                  "championKey": { "type": "string" },
+                  "score": { "type": "integer" },
+                  "verdict": { "type": "string", "enum": ["Favorable", "Even", "Difficult", "Losing"] },
+                  "why": { "type": "string" },
+                  "hints": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            },
+            "openPicks": {
               "type": "array",
               "items": {
                 "type": "object",

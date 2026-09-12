@@ -24,8 +24,9 @@ piece up cold.
 | **Following the role the client assigns you** | Done 2026-09-11, tested against the fixtures; not yet seen in a live autofill |
 | **Enemy roles from play rates, confirmed by the running game** | Done 2026-09-11, seen live the same evening: every placement right, confirmed 8 s into loading |
 | Trace log under `%APPDATA%\Counterpick\logs` | Done: events, mapped drafts, Claude timings, raw payloads |
-| Tests | 143 checks, including real captured payloads and the play-rate snapshot |
+| Tests | 152 checks, including real captured payloads and the play-rate snapshot |
 | **Installer and self-update** | Done 2026-09-12: Velopack, `tools/release.ps1`, Updates panel in Settings |
+| **Pool-blind picks: the best champion in the role, whatever you play** | Done 2026-09-12, in the same shortlist call; not yet seen in a live draft |
 
 The worked example in `src/Counterpick.Web/src/data/scenario.ts` now only appears in a
 plain browser (`npm run dev` outside the app). Inside the app everything starts empty and
@@ -357,6 +358,31 @@ outcome, and a refusal surfaces as a readable error in the UI rather than a blan
 - **Hover does not re-score.** Deliberate: hovers are noisy and each score is an API
   call. Your own hover is shown in the hero and the board.
 
+## The pool-blind picks
+
+Added 2026-09-12, answering "what should I pick regardless of my pool". Under the
+shortlist the draft view shows the three strongest picks in your role from every
+champion the play-rate feed sees there this patch, scored on the same 0-100 scale, with
+a line saying how far above your own best they are.
+
+Both halves come from **one** call to the shortlist model, on purpose:
+
+- Scores asked for together are calibrated against each other. Two calls would produce
+  two scales and the gap - the only number that matters here - would be noise.
+- It is one round trip under a pick timer rather than two.
+- The extra input is the open field itself, about fifty champions with a play rate, so
+  roughly 1.5k tokens per shortlist. Measured against the 9 cents that the first real
+  draft cost, that is a rounding error.
+
+`Services/OpenPool.cs` builds the field and is tested; anything the model names that is
+not in it is dropped, so a hallucinated champion cannot reach the board. No play-rate
+table (a first run with no network and no bundled snapshot loaded) means no open field
+and no section, never a guessed one - the pool shortlist is unaffected either way.
+
+Open cards are clickable like the pool's, so an out-of-pool pick can still be locked and
+briefed. Worth watching in a live draft: whether a champion you cannot play showing up
+first is useful or just noise, and whether three is the right number.
+
 ## Decisions to revisit
 
 - **The API key sits in `%APPDATA%\Counterpick\config.json` in plain text.** Correct for
@@ -376,7 +402,7 @@ outcome, and a refusal surfaces as a readable error in the UI rather than a blan
 ```
 dotnet build                                    # builds C# and the frontend
 dotnet run --project src/Counterpick.App        # launch
-dotnet run --project tests/Counterpick.DataTests # 143 checks
+dotnet run --project tests/Counterpick.DataTests # 152 checks
 ```
 
 For UI work with hot reload, run `npm run dev` in `src/Counterpick.Web` and start a Debug
@@ -398,6 +424,7 @@ the reference for anything the live app should look like.
 | `Services/RoleInference.cs` | Places the enemy side into roles with a confidence; pure and tested |
 | `Services/Lcu/LiveGame.cs` | Live Client Data API: positions for all ten players once the game loads |
 | `Resources/championrates.json` | The bundled play-rate snapshot, refreshed by hand |
+| `Services/OpenPool.cs` | The champions played in a role this patch, minus what is banned or taken; what the pool-blind picks are chosen from |
 | `Services/Lcu/LcuEndpoint.cs` | Port and password parsing from the command line or lockfile |
 | `Services/Lcu/LcuLocator.cs` | Finds the running client (WMI, then lockfile fallbacks) |
 | `Services/Lcu/LcuClient.cs` | HTTPS and WebSocket to one client instance |

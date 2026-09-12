@@ -581,6 +581,36 @@ Check("a melee champion gets a tenth of the floor for bot",
       dianaWeights["Bot"] == RoleInference.Floor * RoleInference.MeleeBotFactor &&
       RoleInference.WeightsFor(rates.RatesFor(45), [], ranged: true)["Bot"] == RoleInference.Floor);
 
+// ── The open field: best pick in the role, pool or not ───────────────────
+// The shortlist ranks the player's pool; the same call also ranks everything played in
+// the role this patch, so the app can say whether the draft wanted something else. The
+// list offered to the model is built here, and nothing outside it survives the answer.
+Console.WriteLine("\nopen. the field for a role");
+var myPool = new[] { "Gwen", "Jax", "Aatrox" };
+var openTop = OpenPool.For(catalog, rates, "Top", [], myPool);
+Check("only champions the feed sees in the role", openTop.Count > 0 && openTop.All(c => c.PlayRate > 0),
+      $"{openTop.Count} candidates");
+Check("richest play rate first",
+      openTop.Select(c => c.PlayRate).SequenceEqual(openTop.Select(c => c.PlayRate).OrderByDescending(r => r)));
+Check("Darius is on the top list, Sona is not",
+      openTop.Any(c => c.ChampionKey == "Darius") && openTop.All(c => c.ChampionKey != "Sona"));
+Check("the player's own pool is marked, not removed",
+      openTop.Single(c => c.ChampionKey == "Gwen").InPool && !openTop.Single(c => c.ChampionKey == "Darius").InPool);
+Check("display names come along for champions whose key is not their name",
+      OpenPool.For(catalog, rates, "Jungle", [], []).FirstOrDefault(c => c.ChampionKey == "MonkeyKing")?.Name == "Wukong");
+
+var openAfterBans = OpenPool.For(catalog, rates, "Top", ["darius", "Jax"], myPool);
+Check("banned and already-picked champions are gone, case regardless",
+      openAfterBans.All(c => c.ChampionKey is not ("Darius" or "Jax")) &&
+      openAfterBans.Count == openTop.Count - 2, $"{openTop.Count} then {openAfterBans.Count}");
+
+Check("a different role is a different field",
+      OpenPool.For(catalog, rates, "Support", [], []).Any(c => c.ChampionKey == "Sona") &&
+      OpenPool.For(catalog, rates, "Support", [], []).All(c => c.ChampionKey != "Darius"));
+Check("the ceiling holds", OpenPool.For(catalog, rates, "Top", [], [], max: 5).Count == 5);
+Check("no play-rate table at all means no open field, not a guessed one",
+      OpenPool.For(catalog, RoleRates.FromJson("""{"data":{"1":{"TOP":{"playRate":0}}}}"""), "Top", [], []).Count == 0);
+
 // ── Live game: positions from the running game ───────────────────────────
 // The Live Client Data API carries a position for all ten players. The fixture is
 // hand-written from Riot's documentation; a real capture should replace it.
