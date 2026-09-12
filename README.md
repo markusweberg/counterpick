@@ -70,7 +70,8 @@ folder lets a second PC install and update from the same releases), and `updateS
 `config.json` overrides it on one machine. A build started from `bin/` or Visual Studio is
 not an install, so it cannot update itself; Settings says so.
 
-Updating never touches `%APPDATA%\Counterpick`, and neither does uninstalling.
+Updating never touches your data - not `%APPDATA%\Counterpick`, not
+`Documents\Counterpick` - and neither does uninstalling.
 
 ### Working on the UI
 
@@ -92,7 +93,7 @@ src/
     Program.cs              Entry point; runs the installer hook before WPF starts
     MainWindow.xaml(.cs)    Hosts WebView2; picks dev server vs packaged UI
     Services/
-      AppPaths.cs           Where everything is written (%APPDATA%\Counterpick)
+      AppPaths.cs           Where everything is written (%APPDATA%, notes in Documents)
       AppConfig.cs          API key, models, primary role
       Storage.cs            SQLite: your pool, notes and results
       BriefCache.cs         SQLite: Claude's briefs, disposable, separate file
@@ -128,20 +129,29 @@ tools/                    release.ps1 builds and packs an installer; asset scrip
 
 ## Your data
 
-Everything the app writes lives in `%APPDATA%\Counterpick`, never in the repo. The two
-databases are deliberately separate, because only one of them matters:
+Your notes database lives in `Documents\Counterpick`, because Windows syncs Documents to
+OneDrive - so the live file is off-machine from the moment you write a note, not just at
+snapshot time. Everything else lives in `%APPDATA%\Counterpick`: a WebView2 profile and
+an art cache have no business in your cloud storage. Nothing is ever written to the repo.
+
+The two databases are deliberately separate, because only one of them matters:
 
 | File | Holds | Replaceable? |
 |---|---|---|
-| `counterpick.db` | **Your** pool, matchup notes, game results | **No. Backed up.** |
+| `Documents\Counterpick\counterpick.db` | **Your** pool, matchup notes, game results | **No. Synced and backed up.** |
 | `cache.db` | Claude's generated briefs | Yes, for pennies. Never backed up |
 | `config.json` | API key, model, primary role | Retype it |
 | `backups/` | Timestamped snapshots of `counterpick.db` | — |
 | `exports/` | `notes.json` and `notes.md` | Regenerated on demand |
 | `cache/`, `webview/` | Data Dragon art, WebView2 profile | Safe to delete |
 
-Set `COUNTERPICK_DATA_DIR` to move that whole folder elsewhere (portable install, or
-test isolation).
+Upgrading from a version that kept the database in `%APPDATA%` moves it on first launch,
+`-wal` sidecar included, and only deletes the old copy once the new one is in place. If
+Documents cannot be written to, the old location keeps working rather than the app
+opening an empty database beside your real one.
+
+Set `COUNTERPICK_DATA_DIR` to put everything, notes database included, in one folder of
+your choosing (portable install on a stick, or test isolation).
 
 ### Backups
 
@@ -157,11 +167,15 @@ Three layers, each covering a failure the others do not:
 3. **Export** — `notes.json` round-trips back in; `notes.md` is readable in Notepad with
    no software at all. This is the layer that survives abandoning the app.
 
+Syncing the live database is not a fourth layer. OneDrive faithfully copies a deletion
+too, within seconds; only the snapshots hold a note you deleted yesterday.
+
 Two properties worth knowing:
 
 - **Snapshots use `VACUUM INTO`, not a file copy.** The database runs in WAL mode, so the
   newest commits can sit in a `-wal` sidecar. Copying `counterpick.db` by hand can
-  silently miss them; if you ever back it up manually, take all three files.
+  silently miss them; if you ever back it up manually, take all three files. Closing the
+  app checkpoints the sidecar away, so what OneDrive then carries is a whole database.
 - **Restore merges, it never overwrites.** Restoring an old snapshot cannot destroy notes
   written since — unique indexes on the natural identity of each row make re-importing
   the same rows a no-op. A fresh install with an empty database pulls the OneDrive mirror

@@ -173,8 +173,9 @@ export function settingsView(): string {
       <div>
         <p class="eyebrow">Counterpick · this machine</p>
         <h2 class="page-title">Settings</h2>
-        <p class="subnote">Everything here lives in <code>%APPDATA%\\Counterpick</code>: the key in
-          <code>config.json</code>, the pool in your notes database. Nothing is sent anywhere but the API.</p>
+        <p class="subnote">The key lives in <code>%APPDATA%\\Counterpick\\config.json</code>;
+          your pool and notes live in <code>Documents\\Counterpick</code>, where OneDrive syncs
+          them. Nothing is sent anywhere but the API.</p>
       </div>
       <div class="bar-cta"><button class="ghost" data-act="back">← Back to draft</button></div>
     </div>

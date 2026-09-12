@@ -27,7 +27,7 @@ public static class Trace
         _log = Path.Combine(Dir, $"counterpick-{stamp}.log");
         _payloads = Path.Combine(Dir, $"lcu-{stamp}.jsonl");
         Prune();
-        Write("app", $"started, data dir {AppPaths.Root}");
+        Write("app", $"started, data dir {AppPaths.Root}, database {AppPaths.DatabaseFile}");
     }
 
     /// <summary>One readable line. Safe from any thread; silently drops on I/O errors.</summary>

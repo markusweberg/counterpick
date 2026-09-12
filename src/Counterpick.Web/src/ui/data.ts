@@ -130,7 +130,10 @@ export function dataView(): string {
       <button class="ghost" data-act="export">Export notes</button>
       <button class="ghost" data-act="import">Import from file…</button>
       <button class="ghost" data-act="reveal" data-path="${esc(s.backupsDir)}">Open backups folder</button>
-    </div>`;
+      <button class="ghost" data-act="reveal" data-path="${esc(s.databaseFile)}">Open notes folder</button>
+    </div>
+    <p class="subnote">Your notes database is <code>${esc(s.databaseFile)}</code>. Snapshots and
+      the brief cache stay in <code>%APPDATA%\\Counterpick</code>.</p>`;
 
   return `${head}${flash}${stats}${actions}
     <div class="panels">

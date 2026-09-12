@@ -132,6 +132,11 @@ public partial class MainWindow : Window
         try
         {
             _backups.SnapshotIfChanged("shutdown");
+
+            // Leave the database in one piece for OneDrive to carry: with the -wal folded
+            // in, the file it uploads after we exit is a complete database rather than
+            // half of a pair.
+            _storage.Checkpoint();
         }
         catch (Exception)
         {

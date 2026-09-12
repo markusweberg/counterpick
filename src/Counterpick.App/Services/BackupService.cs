@@ -12,7 +12,8 @@ public sealed record BackupStatus(
     int SnapshotCount,
     string BackupsDir,
     string? MirrorDir,
-    bool MirrorHealthy);
+    bool MirrorHealthy,
+    string DatabaseFile);
 
 /// <summary>
 /// Snapshots of the notes database.
@@ -95,7 +96,8 @@ public sealed class BackupService(Storage storage)
             AppPaths.BackupsDir,
             mirror,
             mirror is not null && Directory.Exists(mirror) &&
-                File.Exists(Path.Combine(mirror, "counterpick-latest.db")));
+                File.Exists(Path.Combine(mirror, "counterpick-latest.db")),
+            storage.DatabaseFile);
     }
 
     /// <summary>

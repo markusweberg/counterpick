@@ -19,7 +19,9 @@ void Check(string label, bool ok, string detail = "")
 
 Console.WriteLine($"sandbox: {sandbox}");
 Console.WriteLine($"resolved root: {AppPaths.Root}");
-if (!AppPaths.Root.StartsWith(sandbox, StringComparison.OrdinalIgnoreCase))
+Console.WriteLine($"resolved database: {AppPaths.DatabaseFile}");
+if (!AppPaths.Root.StartsWith(sandbox, StringComparison.OrdinalIgnoreCase) ||
+    !AppPaths.DatabaseFile.StartsWith(sandbox, StringComparison.OrdinalIgnoreCase))
 {
     Console.WriteLine("ABORT: isolation failed - refusing to write to the real profile.");
     return 2;
@@ -219,6 +221,44 @@ var recovered = backups.Restore(backups.List().First(b => b.Reason == "test").Pa
 Check("a deleted note can be brought back from a snapshot",
       storage.GetNotes("Jax", "Garen", "Top").Any(n => n.Body == "Rewritten text."),
       $"restore added {recovered.Notes} note(s)");
+
+// ── 15. the move from %APPDATA% to Documents ──────────────────────
+Console.WriteLine("\n15. relocating the notes database to Documents");
+{
+    // COUNTERPICK_DATA_DIR keeps this run in one folder, so drive the move directly
+    // rather than through the process-wide resolution.
+    var appdata = Path.Combine(sandbox, "old-appdata");
+    var documents = Path.Combine(sandbox, "old-documents", "Counterpick");
+    Directory.CreateDirectory(appdata);
+    var from = Path.Combine(appdata, "counterpick.db");
+    var to = Path.Combine(documents, "counterpick.db");
+
+    var moved = new Storage(from);
+    moved.EnsureSchema();
+    moved.AddNote("Gwen", "Darius", "Top", "Written before the move.");
+    File.WriteAllText(from + "-wal", "stands in for uncheckpointed commits");
+
+    Check("the database moves to Documents",
+          AppPaths.Relocate(from, to) == to && File.Exists(to) && !File.Exists(from));
+    Check("the -wal sidecar moves with it, rather than rolling the newest notes back",
+          File.Exists(to + "-wal") && !File.Exists(from + "-wal"));
+
+    File.Delete(to + "-wal");   // it was never a real sidecar
+    Check("the notes came along", new Storage(to).Counts().Notes == 1);
+
+    Check("a later launch has nothing left to move", AppPaths.Relocate(from, to) == to);
+
+    // The dangerous case: a stale copy left in %APPDATA% must never overwrite the one
+    // you have been writing to since.
+    File.WriteAllText(from, "an older database");
+    Check("an existing Documents database is never overwritten",
+          AppPaths.Relocate(from, to) == to && new Storage(to).Counts().Notes == 1);
+
+    // Nothing to move at all: a fresh install just uses the new location.
+    var newInstall = Path.Combine(sandbox, "fresh-documents", "counterpick.db");
+    Check("a fresh install resolves straight to Documents",
+          AppPaths.Relocate(Path.Combine(sandbox, "nothing-here.db"), newInstall) == newInstall);
+}
 
 // ── 13. importing a database from before a migration ─────────────────────
 // A OneDrive mirror or an old snapshot can predate the updated_at column. Found the

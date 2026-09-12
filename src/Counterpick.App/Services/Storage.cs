@@ -10,8 +10,9 @@ public sealed record MatchupRecord(int Wins, int Losses);
 public sealed record DataCounts(int Notes, int Games, int Pool);
 
 /// <summary>
-/// YOUR data - champion pool, matchup notes, game results. One SQLite file under
-/// %APPDATA%\Counterpick, and the only thing in the app that cannot be regenerated.
+/// YOUR data - champion pool, matchup notes, game results. One SQLite file in
+/// Documents\Counterpick, where OneDrive syncs it, and the only thing in the app that
+/// cannot be regenerated.
 ///
 /// Generated briefs deliberately live in a separate database (see <see cref="BriefCache"/>)
 /// so backups stay small and cache corruption can never reach your notes.
@@ -364,6 +365,22 @@ public sealed class Storage
         using var cmd = c.CreateCommand();
         cmd.CommandText = "VACUUM INTO $dest;";
         cmd.Parameters.AddWithValue("$dest", destination);
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Fold the -wal sidecar back into the database file and empty it.
+    ///
+    /// This matters because the database sits in a OneDrive-synced folder. Mid-session
+    /// the cloud holds a .db and a -wal uploaded at different moments, which is not
+    /// guaranteed to be a consistent pair; after a checkpoint the .db stands alone, so
+    /// what syncs once you close the app is a complete database on its own.
+    /// </summary>
+    public void Checkpoint()
+    {
+        using var c = Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
         cmd.ExecuteNonQuery();
     }
 

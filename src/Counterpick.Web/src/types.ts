@@ -235,4 +235,6 @@ export interface BackupStatus {
   backupsDir: string;
   mirrorDir: string | null;
   mirrorHealthy: boolean;
+  /** Full path to counterpick.db. Lives in Documents, so OneDrive syncs it. */
+  databaseFile: string;
 }
