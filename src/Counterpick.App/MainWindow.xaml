@@ -2,13 +2,39 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="Counterpick"
         Icon="Resources/counterpick.ico"
         Height="900" Width="1500"
         MinHeight="560" MinWidth="820"
         WindowStartupLocation="CenterScreen"
-        Background="#0B1119">
+        WindowStyle="None"
+        Background="#010A13">
+    <!--
+        No Windows caption: the League client does not have one, and a light-grey strip
+        over a hextech page is the loudest thing in the room. WindowChrome keeps
+        everything the caption was actually doing - Aero Snap, edge and corner resize,
+        the taskbar preview, double-click to maximise - and only stops Windows painting
+        the bar.
+
+        CaptionHeight starts at zero so a WebView2 runtime without non-client region
+        support leaves the whole page clickable instead of swallowing the top of it.
+        MainWindow.xaml.cs raises it to the height the page reports for its own topbar,
+        but only once that support is confirmed - that strip is what you drag, and the
+        page marks its own controls inside it `app-region: no-drag` so they still take a
+        click. See the note in MainWindow.xaml.cs and `window.setCaptionHeight` in
+        Services/Bridge.cs.
+    -->
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome x:Name="Chrome"
+                            CaptionHeight="0"
+                            GlassFrameThickness="0"
+                            CornerRadius="0"
+                            ResizeBorderThickness="6"
+                            UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
+
     <!-- The whole UI is the web view. Background matches the page ground so a slow
          first paint does not flash white. -->
-    <wv2:WebView2 x:Name="Web" DefaultBackgroundColor="#0B1119" />
+    <wv2:WebView2 x:Name="Web" DefaultBackgroundColor="#010A13" />
 </Window>

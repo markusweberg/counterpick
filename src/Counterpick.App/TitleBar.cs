@@ -5,14 +5,17 @@ using System.Windows.Interop;
 namespace Counterpick.App;
 
 /// <summary>
-/// Paints the native title bar in the page's colours.
+/// Paints what is left of the native window chrome in the page's colours.
 ///
-/// WPF draws the window chrome light no matter what the window contains, so the app
-/// opened with a white bar over a dark page. DWM exposes a dark-caption switch on
-/// Windows 10 1809+ and explicit caption, text and border colours on Windows 11; setting
-/// them keeps the standard title bar (drag, snap, the system buttons) and only changes
-/// its paint. Every call is best-effort: an older build refuses the attribute and keeps
-/// the light bar, which is cosmetic.
+/// The window is frameless now - MainWindow.xaml hands the caption to the page - so the
+/// caption and text colours below never show. They are kept because they are the
+/// fallback: if WindowChrome is ever removed, or a Windows build refuses it, the caption
+/// comes back and it should come back dark rather than white.
+///
+/// What still matters every run is the border colour: the 1px line Windows draws around
+/// the window, which is the only chrome a frameless window has left, and dark mode, which
+/// the system uses for the resize shadow and the right-click system menu. Every call is
+/// best-effort: an older build refuses the attribute, which is cosmetic.
 /// </summary>
 internal static class TitleBar
 {
@@ -31,9 +34,9 @@ internal static class TitleBar
         if (hwnd == IntPtr.Zero) return;
 
         Set(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, 1);
-        Set(hwnd, DWMWA_CAPTION_COLOR, Colorref(0x08, 0x0D, 0x14)); // --sunk, the topbar's own ground
-        Set(hwnd, DWMWA_TEXT_COLOR, Colorref(0xD9, 0xA5, 0x4C));    // --gold, the wordmark
-        Set(hwnd, DWMWA_BORDER_COLOR, Colorref(0x2B, 0x3A, 0x4D));  // --line-hard
+        Set(hwnd, DWMWA_CAPTION_COLOR, Colorref(0x01, 0x0A, 0x13)); // --ground, if a caption ever returns
+        Set(hwnd, DWMWA_TEXT_COLOR, Colorref(0xC8, 0xAA, 0x6E));    // --gold, the wordmark
+        Set(hwnd, DWMWA_BORDER_COLOR, Colorref(0x78, 0x5A, 0x28));  // --line-hard, the frame gold
     }
 
     /// <summary>COLORREF is 0x00BBGGRR.</summary>

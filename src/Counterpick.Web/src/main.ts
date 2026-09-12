@@ -18,7 +18,34 @@ import { afterView, briefView, draftView } from "./ui/views";
 
 const app = document.getElementById("app")!;
 
+/**
+ * The window is frameless and the topbar is its title bar, so the host has to be told how
+ * tall that strip is: WindowChrome decides what counts as caption from a number, and the
+ * page is the only thing that knows it. The bar wraps to two rows on a narrow window, so
+ * this is measured rather than assumed, after every paint and on every resize.
+ *
+ * Only ever sent when it changes - it is the same number on almost every render.
+ */
+let sentCaptionHeight = -1;
+
+function syncCaptionHeight(): void {
+  if (!isHosted) return;
+  const bar = app.querySelector<HTMLElement>(".topbar");
+  if (!bar) return;
+  const height = Math.round(bar.getBoundingClientRect().height);
+  if (height === sentCaptionHeight) return;
+  sentCaptionHeight = height;
+  void call("window.setCaptionHeight", { height }).catch(() => {});
+}
+
+window.addEventListener("resize", () => requestAnimationFrame(syncCaptionHeight));
+
 function render(focusNote = false): void {
+  paint(focusNote);
+  syncCaptionHeight();
+}
+
+function paint(focusNote = false): void {
   // The Data and Settings screens are about the app, not the game, so they drop the
   // hero and the board.
   if (state.screen === "data") {
@@ -196,6 +223,12 @@ app.addEventListener("click", (e) => {
 
   if (action === "data") { void openData(); return; }
   if (action === "settings") { void openSettings(); return; }
+
+  // ── window controls: the app is frameless, so these are the caption buttons ──
+  // Nothing to report if they fail - the window is either there or the host is gone.
+  if (action === "win-minimize") { void call("window.minimize").catch(() => {}); return; }
+  if (action === "win-maximize") { void call("window.maximize").catch(() => {}); return; }
+  if (action === "win-close") { void call("window.close").catch(() => {}); return; }
 
   // ── updates: reachable from the topbar as well as Settings ──────────
   if (action === "update-check") { void call("update.check").catch(() => {}); return; }

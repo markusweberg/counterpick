@@ -28,6 +28,12 @@ public partial class MainWindow : Window
     private LcuWatcher? _watcher;
     private Bridge? _bridge;
 
+    /// <summary>
+    /// Whether this WebView2 runtime can hand the page's drag region to the window. Until
+    /// it can, the caption strip stays zero-height so nothing eats the page's clicks.
+    /// </summary>
+    private bool _canDragFromPage;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -92,6 +98,33 @@ public partial class MainWindow : Window
         core.Settings.IsSwipeNavigationEnabled = false;
         core.Settings.AreDevToolsEnabled = true;   // F12 stays available; this is a personal tool
 
+        // The window has no caption of its own (see MainWindow.xaml), so the page draws
+        // one and marks it `app-region: drag`. Two halves have to meet for that to
+        // actually move the window:
+        //
+        //   1. WebView2 must report those regions as non-client, so a click on them
+        //      falls through the web view's own HWND to the window underneath. That is
+        //      this switch.
+        //   2. WindowChrome underneath must then agree that the strip is a caption.
+        //      It answers the hit test from CaptionHeight alone and knows nothing about
+        //      the page, so a CaptionHeight of zero swallows the fall-through and the
+        //      window stays put however well the page is marked up.
+        //
+        // So the height is left at zero until the first half is confirmed, and the page
+        // then reports what its topbar actually measures - it wraps to two rows on a
+        // narrow window, and a guess here would put the drag strip in the wrong place.
+        // A runtime too old for the property keeps a page that cannot be dragged, which
+        // is survivable; a page that cannot be clicked is not.
+        try
+        {
+            core.Settings.IsNonClientRegionSupportEnabled = true;
+            _canDragFromPage = true;
+        }
+        catch (NotImplementedException)
+        {
+            Trace.Write("window", "WebView2 runtime has no non-client region support; the title bar will not drag.");
+        }
+
         // The watcher emits through the bridge, so the bridge has to exist first. Its
         // constructor takes the watcher, so the watcher gets a forwarding lambda.
         _watcher = new LcuWatcher(_catalog, (name, payload) => _bridge?.Emit(name, payload));
@@ -121,6 +154,27 @@ public partial class MainWindow : Window
         };
 
         Web.Source = ResolveUiSource(core);
+    }
+
+    /// <summary>
+    /// Tell the window how tall the page's own title bar is, in CSS pixels - which are
+    /// WPF device-independent pixels, so the number crosses unchanged at any DPI. The
+    /// page calls this after every render; see `window.setCaptionHeight` in Bridge.cs.
+    ///
+    /// Ignored when the runtime cannot hand drag regions to the window, because then a
+    /// caption strip would only take clicks away from the page without giving anything
+    /// back.
+    /// </summary>
+    public void SetCaptionHeight(double height)
+    {
+        if (!_canDragFromPage) return;
+        var chrome = System.Windows.Shell.WindowChrome.GetWindowChrome(this);
+        if (chrome is null) return;
+
+        // Clamped: a broken measurement must not turn a third of the window into caption.
+        var wanted = Math.Clamp(height, 0, 160);
+        if (Math.Abs(chrome.CaptionHeight - wanted) < 0.5) return;
+        chrome.CaptionHeight = wanted;
     }
 
     /// <summary>
@@ -178,8 +232,8 @@ public partial class MainWindow : Window
     }
 
     private static string MissingFrontendPage(string wwwroot) => $$"""
-        <body style="background:#0B1119;color:#EDE7DA;font:14px system-ui;padding:40px;line-height:1.6">
-          <h2 style="color:#D9A54C">Frontend not built</h2>
+        <body style="background:#010A13;color:#F0E6D2;font:14px system-ui;padding:40px;line-height:1.6">
+          <h2 style="color:#C8AA6E">Frontend not built</h2>
           <p>No <code>index.html</code> under <code>{{wwwroot}}</code>.</p>
           <p>Run <code>dotnet build</code> from the repository root, or start the dev server
              with <code>npm run dev</code> in <code>src/Counterpick.Web</code>.</p>

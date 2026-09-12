@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Windows;
 using Counterpick.App.Services.Lcu;
 using Microsoft.Web.WebView2.Wpf;
 
@@ -205,7 +206,28 @@ public sealed class Bridge
 
         "update.check" => _updates.CheckAsync(),
 
-        "update.restart" => Run(_updates.Restart),
+        // ── window ──────────────────────────────────────────────────────
+        // The window is frameless, so the page draws the caption buttons and these three
+        // are what they do. Dragging and edge-resizing are not here: WindowChrome and the
+        // page's app-region give those straight to Windows.
+        "window.minimize" => Run(() => Host().WindowState = WindowState.Minimized),
+
+        "window.maximize" => Run(() =>
+        {
+            var w = Host();
+            w.WindowState = w.WindowState == WindowState.Maximized
+                ? WindowState.Normal
+                : WindowState.Maximized;
+        }),
+
+        "window.close" => Run(() => Host().Close()),
+
+        // How tall the page's own title bar is. WindowChrome needs the number to know
+        // which strip of the window is caption; the page is the only thing that knows it.
+        "window.setCaptionHeight" => Run(() =>
+        {
+            if (Host() is MainWindow w) w.SetCaptionHeight(Num(p, "height"));
+        }),
 
         _ => throw new ArgumentException($"Unknown method '{method}'.")
     };
@@ -428,6 +450,13 @@ public sealed class Bridge
         new { json = paths.Json, markdown = paths.Markdown };
 
     private static object? Run(Action a) { a(); return null; }
+
+    /// <summary>
+    /// The window the web view lives in. Dispatch already runs on the UI thread, so this
+    /// is safe to touch directly.
+    /// </summary>
+    private Window Host() =>
+        Window.GetWindow(_web) ?? throw new InvalidOperationException("The window is gone.");
 
     private static string? Str(JsonNode? p, string key) => p?[key]?.GetValue<string>();
 

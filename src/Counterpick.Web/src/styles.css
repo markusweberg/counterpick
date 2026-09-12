@@ -1,42 +1,95 @@
 /*
   Counterpick UI.
-  Ported from prototype/src.html - the approved design. Single-theme dark on
-  purpose: this is a champ select overlay, and a light variant would be the
-  wrong object. Every colour is painted explicitly from a token.
+
+  Dressed as the League client. The app sits next to it during a draft, so it borrows the
+  client's own vocabulary: hextech gold frames with brighter corner accents on a lit,
+  near-black blue ground, wide-tracked caps instead of monospace, diamonds for bullets,
+  and cut corners on anything that reads as a hextech part. One sans for everything -
+  the case, the tracking and the gold carry the look, and a serif at label size only
+  carried decoration. Single-theme dark on purpose - a light variant would be the wrong
+  object. Every colour is painted explicitly from a token.
+
+  prototype/src.html was the design this was first ported from; it is history now, not a
+  source of truth. This file is.
 */
 :root{
   color-scheme: dark;
-  --ground:#0B1119; --surface:#121A26; --raised:#18212F; --sunk:#080D14;
-  --line:#26334580; --line-hard:#2B3A4D; --rail:#3A4B61;
-  --ink:#EDE7DA; --ink-2:#A6B2C2; --ink-3:#6D7B8E;
-  --gold:#D9A54C; --gold-deep:#8C6A2C; --gold-wash:#D9A54C1A;
-  --ally:#5AA9DC; --enemy:#D9564B;
-  --fav:#5FB894; --even:#8FA0B8; --hard:#D97F3C; --lose:#D9564B;
-  --display:"Cinzel","Times New Roman",serif;
-  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
-  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
-  --bevel:polygon(17% 0,83% 0,100% 17%,100% 83%,83% 100%,17% 100%,0 83%,0 17%);
-  /* Fixed-pixel corner cut for the gold button: the percentage bevel above suits square
-     portraits but goes lopsided on a wide button. */
-  --cut:polygon(8px 0,calc(100% - 8px) 0,100% 8px,100% calc(100% - 8px),calc(100% - 8px) 100%,8px 100%,0 calc(100% - 8px),0 8px);
+  /* The client's palette. Gold 1-5 runs light to dark; greys are Riot's own neutrals. */
+  --ground:#010A13; --surface:#0A1428; --raised:#10233B; --sunk:#010A13;
+  --line:#785A2866; --line-hard:#785A28; --rail:#463714;
+  --ink:#F0E6D2; --ink-2:#A09B8C; --ink-3:#7A7469;
+  --gold:#C8AA6E; --gold-mid:#C89B3C; --gold-deep:#785A28; --gold-wash:#C8AA6E1A;
+  /* Teal and red rather than the client's lobby blue: this is read at a glance mid-draft,
+     and teal/red is the game's own in-fight convention for the same two sides. */
+  --ally:#0AC8B9; --enemy:#E84057;
+  --fav:#0AC8B9; --even:#A09B8C; --hard:#C89B3C; --lose:#E84057;
+  /* One face for the whole app. The client sets everything in Beaufort, which is
+     proprietary and not shipped; a serif stand-in in its place turned every 11px label
+     into decoration, so this goes the other way and drops the serif entirely. What still
+     carries the look is the case, the tracking and the gold - not the serifs.
+
+     The three names are kept because the roles are still three: display is the big
+     stuff, label the small uppercase, sans the body. Point them somewhere else and the
+     whole app follows. Self-hosted: the app runs beside the game and must look right
+     with no network. */
+  --display:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --label:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --sans:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  /* The corner cut: top-left and bottom-right, the client's own frame idiom. Size per
+     part through --c, because a 10px cut on a 30px portrait is a chamfer, not a detail. */
+  --cut:polygon(var(--c,8px) 0,100% 0,100% calc(100% - var(--c,8px)),calc(100% - var(--c,8px)) 100%,0 100%,0 var(--c,8px));
 }
+
+/* -- cut-corner frames --
+   A clip-path removes the corner and takes any border or inset shadow through it with
+   it, which leaves a gold outline with a hole at each cut. So a cut part paints its
+   frame as its own background and lays the fill one pixel inside on the same shape:
+   what shows around the edge, diagonals included, is the frame. `isolation` makes the
+   element its own stacking context so the fill lands under the label and over the frame.
+
+   --edge is the frame colour, --fill what sits inside it; a state only has to change
+   those two. .lock is not here - it is a solid gold face with no frame to break. */
+.ghost,.mini,.res,.chip,.pill,.badge-pool,.h-flag{
+  position:relative;isolation:isolate;clip-path:var(--cut);
+  background:var(--edge,var(--gold-deep))}
+.ghost::before,.mini::before,.res::before,.chip::before,.pill::before,.badge-pool::before,.h-flag::before{
+  content:"";position:absolute;inset:1px;z-index:-1;clip-path:var(--cut);
+  background:var(--fill,#04101C)}
+
+@font-face{font-family:"Inter";src:url(/fonts/inter.woff2) format("woff2");
+  font-weight:100 900;font-style:normal;font-display:swap}
+
 *{box-sizing:border-box}
-body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+/* Nothing in the client is a flat fill: the ground is lit from above, sunk at the
+   bottom, and vignetted at the corners. Fixed, so scrolling Settings does not drag the
+   light with it. */
+body{margin:0;color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;background:
+    radial-gradient(120% 70% at 50% -8%,#1B3A5B66 0%,transparent 62%),
+    radial-gradient(90% 60% at 50% 108%,#07203266 0%,transparent 60%),
+    linear-gradient(180deg,#0A1428 0%,#04101C 45%,#010A13 100%);
+  background-attachment:fixed;background-color:var(--ground)}
 button,select{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 :focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 /* The scrollbar is part of the window, not the grey system strip laid over it: a thin
-   thumb in the line colour on no track at all, so a long Settings page scrolls without
-   a second border appearing down the right edge. Both spellings are here so an older
-   WebView2 than the one this was built against still gets a painted bar; whichever the
-   runtime understands wins, and they are painted to match. */
-html{scrollbar-width:thin;scrollbar-color:var(--rail) transparent;overflow-x:clip}
+   gold-brown thumb on no track at all, so a long Settings page scrolls without a second
+   border appearing down the right edge. Both spellings are here so an older WebView2
+   than the one this was built against still gets a painted bar; whichever the runtime
+   understands wins, and they are painted to match. */
+html{scrollbar-width:thin;scrollbar-color:var(--gold-deep) transparent;overflow-x:clip}
 ::-webkit-scrollbar{width:12px;height:12px}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--rail);background-clip:padding-box;border:4px solid transparent}
-::-webkit-scrollbar-thumb:hover{background:var(--gold-deep);background-clip:padding-box}
+::-webkit-scrollbar-thumb{background:var(--gold-deep);background-clip:padding-box;border:4px solid transparent}
+::-webkit-scrollbar-thumb:hover{background:var(--gold);background-clip:padding-box}
 ::-webkit-scrollbar-corner{background:transparent}
 img{display:block;max-width:100%}
 h2,h3,h4{text-wrap:balance}
+
+/* The grain. The client's dark is never clean - there is always smoke or parchment over
+   it. One tiled noise field above everything, too faint to read as texture and enough to
+   stop the flats looking like flats. Never in the way of a click. */
+body::after{content:"";position:fixed;inset:0;z-index:60;pointer-events:none;opacity:.035;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E")}
 
 /* The shell is measured against the window, not the scrollport, so nothing moves when a
    screen turns out to be long enough to scroll: Settings and Data stay under the cursor
@@ -45,198 +98,290 @@ h2,h3,h4{text-wrap:balance}
    the root; every band's own padding keeps its content clear of it. */
 .app{display:flex;flex-direction:column;min-height:100svh;width:100vw}
 
-/* -- topbar -- */
-.topbar{display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding:11px 20px;background:var(--sunk);border-bottom:1px solid var(--line-hard)}
-.wordmark{font-family:var(--display);font-weight:700;font-size:16px;letter-spacing:.10em;color:var(--gold);text-transform:uppercase;white-space:nowrap}
+/* -- the frame --
+   The client paints objects, not a hairline grid: a gold-brown border over a vertical
+   gradient, sunk 1px so the border reads as bevelled, with brighter gold corner accents
+   at the two cut corners. One block here, so every panel in the app is the same part. */
+.rec,.panel,.win,.notice,.statcard,.kv,.notegroup,.snaprow,.chip-champ,.tile{
+  position:relative;border:1px solid var(--line-hard);
+  background:linear-gradient(180deg,#0A1428 0%,#040F1B 60%,#010A13 100%);
+  box-shadow:inset 0 0 0 1px #010A1366}
+.rec::before,.panel::before,.win::before,.notice::before,.statcard::before,.notegroup::before{
+  content:"";position:absolute;left:0;top:0;width:11px;height:11px;pointer-events:none;
+  border-top:1px solid var(--gold);border-left:1px solid var(--gold);opacity:.6}
+.rec::after,.panel::after,.win::after,.statcard::after,.notegroup::after{
+  content:"";position:absolute;right:0;bottom:0;width:11px;height:11px;pointer-events:none;
+  border-bottom:1px solid var(--gold);border-right:1px solid var(--gold);opacity:.6}
+
+/* -- topbar --
+   Also the window's title bar: the app is frameless, so this strip is what you drag. The
+   controls inside it opt back out, or the buttons would never receive a click. */
+/* Aligned on the baseline, not on the middle of each box. The bar carries five different
+   text sizes - the 16px wordmark, 13px tabs, 12.5px status, the 20px clock and its 12px
+   label - and centring boxes that size leaves every one of them sitting on a slightly
+   different line. Caps set in a serif make that stagger obvious. */
+.topbar{position:relative;display:flex;align-items:baseline;gap:22px;flex-wrap:wrap;
+  padding:7px 20px 8px;background:linear-gradient(180deg,#0A1428 0%,#010A13 100%);
+  app-region:drag;-webkit-app-region:drag}
+.topbar button,.topbar select,.topbar .winbtns{app-region:no-drag;-webkit-app-region:no-drag}
+/* The seam under a band is a light bleed, brightest at the middle, gone at both edges -
+   never a ruled line from corner to corner. */
+.topbar::after,.board::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;
+  pointer-events:none;background:linear-gradient(90deg,transparent,var(--gold-deep) 18%,var(--gold) 50%,var(--gold-deep) 82%,transparent)}
+.wordmark{font-family:var(--display);font-weight:700;font-size:16px;letter-spacing:.12em;color:var(--gold);text-transform:uppercase;white-space:nowrap}
 .wordmark span{color:var(--ink-3)}
 
-.steps{display:flex;gap:1px;background:var(--line-hard)}
-.step{background:var(--surface);padding:6px 13px;font-family:var(--mono);font-size:12px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3);transition:color .14s ease,background .14s ease}
-.step:hover{color:var(--ink-2)}
-.step[aria-current="true"]{background:var(--raised);color:var(--gold);box-shadow:inset 0 -2px 0 var(--gold)}
-.step[disabled]{color:#42506180;cursor:default}
-.step.upd{color:var(--gold);box-shadow:inset 0 -2px 0 var(--gold-deep)}
-.step.upd:hover{background:var(--gold-wash)}
+/* The window buttons, drawn the way the client draws them: thin gold glyphs, no boxes,
+   and a red wash only under close. */
+/* Glyphs, not text: these centre on the bar rather than joining its baseline. */
+.winbtns{display:flex;align-items:center;gap:2px;margin-left:14px;align-self:center}
+/* Windows' own caption glyphs, so minimise and maximise are the shapes muscle memory
+   expects; the font ships with Windows 10 and 11 and is never downloaded. */
+.winbtn{display:grid;place-items:center;width:34px;height:26px;color:var(--ink-2);
+  font-family:"Segoe Fluent Icons","Segoe MDL2 Assets",var(--sans);
+  font-size:11px;line-height:1;transition:color .14s ease,background-color .14s ease}
+.winbtn:hover{color:var(--ink);background:var(--gold-wash)}
+.winbtn.close:hover{color:#FFD9D9;background:#E8405733}
 
-.topbar-right{margin-left:auto;display:flex;align-items:center;gap:20px;flex-wrap:wrap}
-.lcu{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:13px;letter-spacing:.05em;color:var(--ink-2)}
-.dot{width:7px;height:7px;border-radius:50%;background:var(--fav);animation:pulse 2.4s ease-out infinite}
-@keyframes pulse{0%{box-shadow:0 0 0 0 #5FB89455}70%{box-shadow:0 0 0 7px #5FB89400}100%{box-shadow:0 0 0 0 #5FB89400}}
+/* Tabs: free-standing wide caps under a gold underline that fades out at both ends. */
+.steps{display:flex;align-items:baseline;gap:22px}
+.step{padding:5px 1px;font-family:var(--label);font-weight:600;font-size:13px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--ink-3);background:none;position:relative;
+  transition:color .14s ease}
+.step:hover{color:var(--ink-2)}
+.step::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;opacity:0;
+  background:linear-gradient(90deg,transparent,var(--gold) 25%,var(--gold) 75%,transparent);
+  transition:opacity .14s ease}
+.step[aria-current="true"]{color:var(--gold)}
+.step[aria-current="true"]::after{opacity:1}
+.step[disabled]{color:#3C3C41;cursor:default}
+.step[disabled]::after{opacity:0}
+.step.upd{color:var(--gold-mid)}
+.step.upd::after{opacity:.5;background:linear-gradient(90deg,transparent,var(--gold-deep) 25%,var(--gold-deep) 75%,transparent)}
+.step.upd:hover{color:var(--ink)}
+
+.topbar-right{margin-left:auto;display:flex;align-items:baseline;gap:22px;flex-wrap:wrap}
+.lcu{display:flex;align-items:center;gap:8px;font-family:var(--label);font-weight:600;font-size:12.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-2)}
+/* Centred, with nothing of its own to throw it off - measured at half a pixel from the
+   middle of the capitals beside it. */
+.dot{flex:none;width:7px;height:7px;margin:0;background:var(--fav);transform:rotate(45deg);
+  animation:pulse 2.4s ease-out infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 #0AC8B955}70%{box-shadow:0 0 0 7px #0AC8B900}100%{box-shadow:0 0 0 0 #0AC8B900}}
 @media (prefers-reduced-motion:reduce){.dot{animation:none}}
 .clock{display:flex;align-items:baseline;gap:8px}
-.clock .t{font-family:var(--mono);font-weight:600;font-size:19px;font-variant-numeric:tabular-nums}
-.clock .l{font-family:var(--mono);font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+.clock .t{font-family:var(--display);font-weight:600;font-size:20px;font-variant-numeric:tabular-nums;letter-spacing:.04em}
+.clock .l{font-family:var(--label);font-weight:600;font-size:12px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3)}
 
 /* -- hero -- */
 .hero{position:relative;height:236px;overflow:hidden;background:var(--sunk);border-bottom:1px solid var(--line-hard)}
 .hero-side{position:absolute;inset:0;background-size:cover;background-repeat:no-repeat}
+/* The two splashes meet on one diagonal, from 55% at the top to 47% at the bottom.
+   The enemy side is mirrored so its champion faces in, and scaleX(-1) mirrors the clip
+   path with it - so its polygon has to be written back to front or the two edges lean
+   opposite ways and cross, overlapping at the top and leaving a wedge of bare page at
+   the bottom. Mirrored, screen x = 100% - local x: 54.7 -> 45.3 and 46.7 -> 53.3, which
+   lands the enemy's edge on the seam's left lip, tucked under the gold. */
 .hero-side.me{clip-path:polygon(0 0,55% 0,47% 100%,0 100%)}
-.hero-side.foe{clip-path:polygon(0 0,54% 0,46% 100%,0 100%);transform:scaleX(-1)}
+.hero-side.foe{clip-path:polygon(0 0,45.3% 0,53.3% 100%,0 100%);transform:scaleX(-1)}
 .hero-scrim{position:absolute;inset:0;background:
-  linear-gradient(180deg,#080D14CC 0%,#080D1440 30%,#080D1466 58%,#080D14F2 100%),
-  radial-gradient(120% 90% at 50% 50%,transparent 30%,#080D1499 100%)}
+  linear-gradient(180deg,#010A13CC 0%,#010A1340 30%,#010A1366 58%,#010A13F2 100%),
+  radial-gradient(120% 90% at 50% 50%,transparent 30%,#010A1399 100%)}
 .hero-seam{position:absolute;inset:0;clip-path:polygon(54.7% 0,55.3% 0,47.3% 100%,46.7% 100%);
-  background:linear-gradient(180deg,#D9A54C00,#D9A54CCC 45%,#D9A54C00)}
-.hero-none{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--mono);font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+  background:linear-gradient(180deg,#C8AA6E00,#C8AA6ECC 45%,#C8AA6E00)}
+.hero-none{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--label);font-weight:600;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
 
-.hero-txt{position:absolute;inset:auto 0 0 0;display:flex;align-items:flex-end;gap:14px;padding:16px 22px}
-.h-name{font-family:var(--display);font-weight:700;font-size:29px;letter-spacing:.03em;margin:0;line-height:1;text-shadow:0 2px 14px #080D14}
-.h-cls{display:block;font-family:var(--mono);font-size:11.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-2);margin-bottom:6px;text-shadow:0 1px 6px #080D14}
+.hero-txt{position:absolute;inset:auto 0 0 0;display:flex;align-items:flex-end;gap:14px;padding:16px 20px}
+/* Cinzel rendered lowercase as small capitals, so every champion name and page
+   title read as caps. Inter does not, and the client sets these in caps anyway, so
+   the case is stated rather than inherited from the face. */
+.h-name{font-family:var(--display);font-weight:700;font-size:30px;letter-spacing:.05em;text-transform:uppercase;margin:0;line-height:1;text-shadow:0 2px 14px #010A13}
+.h-cls{display:block;font-family:var(--label);font-weight:600;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2);margin-bottom:6px;text-shadow:0 1px 6px #010A13}
 .h-foe{margin-left:auto;text-align:right}
-.h-foe .h-name{color:#F0B4AE}
+.h-foe .h-name{color:#F5B8B4}
 .h-foe .h-cls{color:var(--enemy)}
 .h-mid{text-align:center;padding-bottom:2px}
-.h-score{display:block;font-family:var(--mono);font-weight:600;font-size:23px;line-height:1;font-variant-numeric:tabular-nums;color:var(--gold);text-shadow:0 2px 10px #080D14}
-.h-scorel{display:block;font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);margin-top:3px}
-.h-flag{position:absolute;top:14px;left:22px;font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);background:#080D14CC;border:1px solid var(--gold-deep);padding:4px 10px}
-.h-flag.locked{color:var(--fav);border-color:#5FB89466}
-.h-flag.autofill{left:auto;right:22px;color:var(--gold);border-color:var(--gold);background:#080D14E6}
+.h-score{display:block;font-family:var(--display);font-weight:700;font-size:26px;line-height:1;font-variant-numeric:tabular-nums;color:var(--gold);text-shadow:0 2px 10px #010A13}
+.h-scorel{display:block;font-family:var(--label);font-weight:600;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-top:3px}
+.h-flag{--c:5px;position:absolute;top:14px;left:20px;font-family:var(--label);font-weight:600;font-size:12px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);padding:5px 11px;
+  --edge:var(--gold-deep);--fill:#010A13}
+.h-flag.locked{color:var(--fav);--edge:#1E6E63}
+.h-flag.autofill{left:auto;right:20px;color:var(--gold);--edge:var(--gold)}
 .h-cls .autofill{color:var(--gold)}
 
 /* -- board -- */
-.board{display:grid;grid-template-columns:1fr auto 1fr;gap:18px;align-items:start;padding:14px 20px;background:var(--surface);border-bottom:1px solid var(--line-hard)}
-.side-label{display:flex;align-items:center;gap:8px;margin-bottom:9px;font-family:var(--mono);font-size:12px;letter-spacing:.13em;text-transform:uppercase}
-.side-label .bar{width:16px;height:2px}
-.side-ally{color:var(--ally)} .side-ally .bar{background:var(--ally)}
-.side-enemy{color:var(--enemy)} .side-enemy .bar{background:var(--enemy)}
+.board{position:relative;display:grid;grid-template-columns:1fr auto 1fr;gap:18px;align-items:start;
+  padding:14px 20px;background:linear-gradient(180deg,#0A1428 0%,#010A13 100%)}
+.side-label{display:flex;align-items:center;gap:8px;margin-bottom:9px;font-family:var(--label);font-weight:600;font-size:12.5px;letter-spacing:.15em;text-transform:uppercase}
+/* .tick, not .bar: .bar is the page's section-header row further down, and the two were
+   sharing a name, so this 2px dash was quietly inheriting that rule's margin-bottom:14px
+   and riding 7px above the words it belongs to. Everything it needs is stated here. */
+.side-label .tick{flex:none;display:block;width:16px;height:2px;margin:0;align-self:center;background:currentColor}
+.side-ally{color:var(--ally)}
+.side-enemy{color:var(--enemy)}
 .side-enemy .side-label,.side-enemy .row{justify-content:flex-end}
 .row{display:flex;gap:7px;flex-wrap:wrap}
-.vs{align-self:center;font-family:var(--display);font-weight:600;font-size:13.5px;letter-spacing:.16em;color:var(--ink-3);padding-top:20px}
+.vs{align-self:center;font-family:var(--display);font-weight:700;font-size:14px;letter-spacing:.18em;color:var(--gold-deep);padding-top:20px}
 
 .slot{width:92px;display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center}
-.port{position:relative;width:48px;height:48px;clip-path:var(--bevel);background:var(--sunk);overflow:hidden;flex:none}
-.port img{width:100%;height:100%;object-fit:cover}
-/* An unpicked slot is only a beveled outline, so the board reads as empty rather than
-   full of dark boxes. The clip would slice a border or shadow at the corners, so the
-   outline is the element painted in line colour with the board painted 1px inside. */
-.port.empty{background:var(--line-hard)}
-.port.empty::before{content:"";position:absolute;inset:1px;background:var(--surface);clip-path:var(--bevel)}
-.slot.you .port.empty{background:var(--gold-deep)}
-.slot.lane .port.empty{background:var(--enemy)}
-.slot .nm{font-family:var(--display);font-weight:600;font-size:13px;letter-spacing:.03em;line-height:1.2;
+/* A portrait is a framed hextech part: a 1.5px frame in the side's colour, the corners
+   cut, the art inset inside it. clip-path eats a box-shadow, so the frame is the
+   element's own background showing through its padding and any glow is a drop-shadow. */
+.port{--c:5px;position:relative;width:48px;height:48px;padding:1.5px;clip-path:var(--cut);
+  background:var(--frame,var(--rail));overflow:hidden;flex:none}
+.port img{width:100%;height:100%;object-fit:cover;clip-path:var(--cut);background:var(--sunk)}
+/* An unpicked slot is only a frame around the ground, so the board reads as empty rather
+   than full of dark boxes. */
+.port.empty::before{content:"";position:absolute;inset:1.5px;background:#04101C;clip-path:var(--cut)}
+.side-ally .port{--frame:#3C4A5A}
+.side-enemy .port{--frame:#4A3C42}
+.slot.you .port{--frame:var(--gold);filter:drop-shadow(0 0 7px #C8AA6E55)}
+.slot.lane .port{--frame:var(--enemy);filter:drop-shadow(0 0 6px #E8405744)}
+.slot .nm{font-family:var(--display);font-weight:600;font-size:13px;letter-spacing:.05em;text-transform:uppercase;line-height:1.2;
   white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .slot .nm.long{font-size:11px;letter-spacing:0}
-.slot .rl{font-family:var(--mono);font-size:11px;letter-spacing:.10em;text-transform:uppercase;color:var(--ink-3)}
+.slot .rl{font-family:var(--label);font-weight:600;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
 .slot.pending .nm{color:var(--ink-3);font-family:var(--sans);font-weight:500;font-size:12px;letter-spacing:0}
-.slot.you .port{box-shadow:0 0 0 1.5px var(--gold),0 0 18px -5px var(--gold)}
 .slot.you .rl{color:var(--gold)}
-.slot.lane .port{box-shadow:0 0 0 1.5px var(--enemy)}
 
-.rolesel{appearance:none;font-family:var(--mono);font-size:11px;letter-spacing:.09em;text-transform:uppercase;
-  color:var(--ink-2);background:var(--sunk);border:1px solid var(--line-hard);padding:2px 15px 2px 6px;width:100%;
-  background-image:linear-gradient(45deg,transparent 50%,var(--ink-3) 50%),linear-gradient(135deg,var(--ink-3) 50%,transparent 50%);
-  background-position:calc(100% - 8px) 9px,calc(100% - 5px) 9px;background-size:3px 3px,3px 3px;background-repeat:no-repeat}
-.rolesel:hover{border-color:var(--gold-deep);color:var(--ink)}
-.rolesel.is-lane{color:var(--enemy);border-color:#D9564B66}
+/* Squared, not cut: a <select> cannot carry the pseudo-element the cut frame is drawn
+   with, so a clip here would only punch two holes in its outline. */
+.rolesel{appearance:none;font-family:var(--label);font-weight:600;font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-2);background:var(--sunk);border:1px solid var(--line-hard);padding:3px 15px 3px 6px;width:100%;
+  background-image:linear-gradient(45deg,transparent 50%,var(--gold-deep) 50%),linear-gradient(135deg,var(--gold-deep) 50%,transparent 50%);
+  background-position:calc(100% - 8px) 10px,calc(100% - 5px) 10px;background-size:3px 3px,3px 3px;background-repeat:no-repeat}
+.rolesel:hover{color:var(--ink);border-color:var(--gold)}
+.rolesel.is-lane{color:var(--enemy);border-color:#E8405766}
 
 /* -- main -- */
 main{flex:1;padding:18px 20px 44px}
 .bar{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:14px}
-.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold-deep);margin:0 0 4px}
+.eyebrow{font-family:var(--label);font-weight:600;font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);margin:0 0 5px}
 .subnote{font-size:13.5px;color:var(--ink-3);margin:0;line-height:1.45;max-width:62ch}
 .bar-cta{margin-left:auto}
 
 /* -- buttons --
-   .lock is the one gold action on a screen and keeps the cut corners of the portraits.
-   Everything else is a .ghost, and a ghost is just a .mini at full size: a square 1px
-   frame in the line colour. The cut corners were a 1px hairline chasing a clipped
-   diagonal, which arrives ragged or missing at each corner depending on where the button
-   lands on the pixel grid; a straight border cannot fail that way, and it puts every
-   secondary action on both the session and the Settings screens in one family. */
+   .lock is the one gold action on a screen: the client's PLAY button, cut at the
+   corners, bevelled light at the top and dark at the bottom. Everything else is the
+   client's secondary button - a gold frame over the dark ground, filling with a gold
+   wash on hover. Both are set in the display face, because nothing in the client is
+   monospace. */
 .lock,.ghost{display:inline-flex;align-items:center;justify-content:center;gap:8px;
-  min-height:38px;font-family:var(--mono);text-transform:uppercase;white-space:nowrap;
-  transition:color .14s ease,background-color .14s ease,border-color .14s ease,transform .08s ease}
+  min-height:38px;font-family:var(--label);font-weight:600;text-transform:uppercase;white-space:nowrap;
+  --c:8px;clip-path:var(--cut);
+  transition:color .14s ease,background-color .14s ease,transform .08s ease}
 .lock:active,.ghost:active{transform:translateY(1px)}
-.lock{padding:0 26px;font-size:13px;font-weight:600;letter-spacing:.14em;color:#0B1119;clip-path:var(--cut);
-  background:linear-gradient(180deg,#EDBE66 0%,#D9A54C 52%,#C08D36 100%);
-  box-shadow:inset 0 1px 0 #FFE7B0,inset 0 -1px 0 #7A5B24}
-.lock:hover{background:linear-gradient(180deg,#F7CB72 0%,#E5B054 52%,#CC973F 100%)}
-.ghost{padding:0 20px;font-size:12.5px;font-weight:500;letter-spacing:.11em;
-  color:var(--ink-2);background:var(--surface);border:1px solid var(--line-hard)}
-.ghost:hover{color:var(--gold);border-color:var(--gold-deep);background:var(--gold-wash)}
+.lock{padding:0 26px;font-size:13.5px;letter-spacing:.15em;color:#010A13;
+  background:linear-gradient(180deg,#F0E6D2 0%,#C8AA6E 48%,#A88B4E 100%);
+  box-shadow:inset 0 1px 0 #FFFBF0,inset 0 -1px 0 #6B5220}
+.lock:hover{background:linear-gradient(180deg,#FFFBF0 0%,#DCC189 48%,#BD9F5C 100%)}
+.lock::after{content:"";width:0;height:0;margin-left:2px;
+  border:5px solid transparent;border-left-color:#010A13;border-right:0}
+.ghost{padding:0 20px;font-size:12.5px;letter-spacing:.13em;color:var(--gold);
+  --edge:var(--gold-deep);--fill:#04101C}
+.ghost:hover{color:var(--ink);--edge:var(--gold);--fill:#1A1712}
 .lock[disabled],.ghost[disabled]{opacity:.4;cursor:default;pointer-events:none}
 
-/* -- recommendation cards --
-   Each card draws its own hairline; the grid itself stays unpainted so a short last row
-   leaves ground, not a slab. Adjacent hairlines share the 1px gap. */
-.recs{display:grid;grid-template-columns:repeat(auto-fit,minmax(292px,1fr));gap:1px}
-.rec{background:var(--surface);cursor:pointer;text-align:left;padding:13px 15px 15px;position:relative;transition:background .14s ease;
-  box-shadow:0 0 0 1px var(--line-hard)}
-.rec:hover{background:var(--raised)}
-.rec[aria-pressed="true"]{background:var(--raised);box-shadow:0 0 0 1px var(--line-hard),inset 0 0 0 1px var(--gold-deep),inset 3px 0 0 var(--gold)}
+/* -- recommendation cards -- */
+.recs{display:grid;grid-template-columns:repeat(auto-fit,minmax(292px,1fr));gap:10px}
+/* The one place with a hover flourish: a slow gold sweep across the card, the way the
+   client lights a tile you are about to choose. It rides on the card's own background
+   layers, so the corner accents are free to stay accents. */
+.rec{cursor:pointer;text-align:left;padding:13px 15px 15px;
+  background-image:linear-gradient(100deg,transparent 42%,#C8AA6E1F 50%,transparent 58%),
+                   linear-gradient(180deg,#0A1428 0%,#040F1B 60%,#010A13 100%);
+  background-size:250% 100%,100% 100%;background-position:190% 0,0 0;
+  transition:background-position .55s ease,box-shadow .14s ease}
+.rec:hover{background-position:-60% 0,0 0;box-shadow:inset 0 0 0 1px #010A1366,0 0 14px -6px var(--gold)}
+@media (prefers-reduced-motion:reduce){.rec{transition:box-shadow .14s ease}.rec:hover{background-position:190% 0,0 0}}
+.rec[aria-pressed="true"]{border-color:var(--gold);
+  box-shadow:inset 0 0 0 1px #010A1366,inset 3px 0 0 var(--gold),0 0 18px -8px var(--gold)}
+.rec[aria-pressed="true"]::before,.rec[aria-pressed="true"]::after{opacity:1}
 .rec-top{display:flex;align-items:center;gap:11px}
-.rec .port{width:42px;height:42px}
+.rec .port{width:42px;height:42px;--frame:var(--gold-deep)}
+.rec[aria-pressed="true"] .port{--frame:var(--gold)}
 .rec-id{flex:1;min-width:0}
-.rec .nm{font-family:var(--display);font-weight:600;font-size:16px;letter-spacing:.03em;display:block;line-height:1.15}
-.rec .cls{font-family:var(--mono);font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
-.rec .score{font-family:var(--mono);font-weight:600;font-size:19px;font-variant-numeric:tabular-nums;color:var(--ink-2);line-height:1}
+.rec .nm{font-family:var(--display);font-weight:700;font-size:16px;letter-spacing:.05em;text-transform:uppercase;display:block;line-height:1.15}
+.rec .cls{font-family:var(--label);font-weight:600;font-size:11px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3)}
+.rec .score{font-family:var(--display);font-weight:700;font-size:21px;font-variant-numeric:tabular-nums;color:var(--ink-2);line-height:1}
 .rec[aria-pressed="true"] .score{color:var(--gold)}
-.meter{display:block;height:2px;background:var(--sunk);margin:11px 0 9px}
-.meter i{display:block;height:100%}
+/* The client's progress bars: a sunk track inside a thin frame, the fill capped with a
+   bright leading edge. */
+.meter{display:block;height:4px;background:var(--sunk);box-shadow:inset 0 0 0 1px var(--rail);margin:11px 0 9px}
+.meter i{display:block;height:100%;box-shadow:inset -1px 0 0 #F0E6D2AA}
 .rec-chips{display:flex;align-items:center;gap:8px;margin-bottom:9px}
-.chip{display:inline-block;font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.11em;text-transform:uppercase;padding:2px 7px;border:1px solid currentColor}
+.chip,.badge1,.badge-open,.badge-pool,.pill{--c:5px;clip-path:var(--cut)}
+/* The verdict chip's frame is the verdict colour, so the edge follows the text. */
+.chip{display:inline-block;font-family:var(--label);font-weight:600;font-size:11px;letter-spacing:.12em;text-transform:uppercase;padding:3px 8px;
+  --edge:currentColor;--fill:#040F1B}
 .d-fav{color:var(--fav)}.d-even{color:var(--even)}.d-hard{color:var(--hard)}.d-lose{color:var(--lose)}
-.badge1{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);background:var(--gold-wash);padding:3px 7px}
-/* The open field: the same cards, sunk a shade and badged in ally blue, so the gold
+.badge1{font-family:var(--label);font-weight:600;font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:#010A13;background:linear-gradient(180deg,#E2CE9E,#C8AA6E);padding:3px 8px}
+/* The open field: the same cards, sunk a shade and badged in ally teal, so the gold
    "Recommended" stays the one pick the app is actually telling you to make. */
-.open-bar{margin-top:28px;padding-top:18px;border-top:1px solid var(--line-hard)}
-.recs.open .rec{background:var(--sunk)}
-.recs.open .rec:hover{background:var(--surface)}
-.recs.open .rec[aria-pressed="true"]{background:var(--surface)}
-.badge-open{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ally);background:#5AA9DC1A;padding:3px 7px}
-.badge-pool{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);border:1px solid var(--line-hard);padding:2px 6px}
+.open-bar{margin-top:28px;padding-top:18px;border-top:1px solid var(--line)}
+.recs.open .rec{border-color:var(--rail)}
+.recs.open .rec::before,.recs.open .rec::after{opacity:.35}
+.recs.open .rec[aria-pressed="true"]{border-color:var(--gold)}
+.badge-open{font-family:var(--label);font-weight:600;font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--ally);background:#0AC8B91F;padding:3px 8px}
+.badge-pool{font-family:var(--label);font-weight:600;font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);padding:3px 8px;
+  --edge:var(--rail);--fill:#010A13}
 .rec .why{font-size:14px;line-height:1.45;color:var(--ink);margin:0 0 10px;text-wrap:pretty}
+/* The client's list mark is a small diamond, never a dash or a dot. */
 .hints{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}
-.hints li{font-size:13px;line-height:1.4;color:var(--ink-3);padding-left:12px;position:relative}
-.hints li::before{content:"";position:absolute;left:0;top:7px;width:4px;height:1px;background:var(--ink-3)}
+.hints li{font-size:13px;line-height:1.4;color:var(--ink-3);padding-left:14px;position:relative}
+.hints li::before{content:"";position:absolute;left:0;top:6px;width:5px;height:5px;background:var(--gold-deep);transform:rotate(45deg)}
 
 /* boxed messages in place of content */
-.notice{background:var(--surface);border-left:2px solid var(--gold-deep);padding:18px 20px;max-width:70ch}
-.notice.warn{border-left-color:var(--hard)}
-.notice h3{font-family:var(--display);font-weight:600;font-size:17px;margin:0 0 8px;letter-spacing:.02em}
+.notice{padding:18px 20px;max-width:70ch;box-shadow:inset 0 0 0 1px #010A1366,inset 3px 0 0 var(--gold-deep)}
+.notice.warn{box-shadow:inset 0 0 0 1px #010A1366,inset 3px 0 0 var(--hard)}
+.notice h3{font-family:var(--display);font-weight:700;font-size:17px;margin:0 0 8px;letter-spacing:.03em}
 .notice p{margin:0 0 14px;font-size:14.5px;line-height:1.6;color:var(--ink-2)}
 
-/* -- brief -- */
+/* -- brief --
+   A section heading in the client is gold caps behind a diamond, over a rule that fades
+   out rather than reaching the far edge. */
 .sect{margin-top:26px}
-.sect h3{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--gold-deep);margin:0 0 12px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+.sect h3{font-family:var(--label);font-size:12.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);margin:0 0 12px;padding:0 0 7px 16px;position:relative;
+  background:linear-gradient(90deg,var(--gold-deep),#785A2800) left bottom/100% 1px no-repeat}
+.sect h3::before,.panel-head h3::before{content:"";position:absolute;left:2px;top:.45em;width:6px;height:6px;background:var(--gold);transform:rotate(45deg)}
 .headline{font-size:17px;line-height:1.55;margin:0;max-width:66ch;text-wrap:pretty}
 .beats{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:11px}
 .beat{display:grid;grid-template-columns:74px minmax(0,1fr);gap:14px;align-items:baseline}
-.beat .mark{font-family:var(--mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);text-align:right}
+.beat .mark{font-family:var(--label);font-weight:600;font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--gold-deep);text-align:right}
 .beat p{margin:0;font-size:15px;line-height:1.5;color:var(--ink-2);max-width:64ch}
 .beat p strong,.para strong{color:var(--ink);font-weight:600}
-.windows{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1px;background:var(--line-hard)}
-.win{background:var(--surface);padding:13px 15px}
-.win h4{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.11em;text-transform:uppercase;margin:0 0 9px;display:flex;align-items:center;gap:7px}
-.win h4::before{content:"";width:14px;height:2px;background:currentColor}
+.windows{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px}
+.win{padding:13px 15px}
+.win h4{font-family:var(--label);font-size:12.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;margin:0 0 9px;display:flex;align-items:center;gap:7px}
+.win h4::before{content:"";flex:none;width:14px;height:2px;background:currentColor}
 .win.mine h4{color:var(--fav)} .win.theirs h4{color:var(--enemy)}
 .win ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:7px}
-.win li{font-size:14px;line-height:1.45;color:var(--ink-2);padding-left:13px;position:relative}
-.win li::before{content:"";position:absolute;left:0;top:8px;width:4px;height:4px;background:var(--ink-3)}
+.win li{font-size:14px;line-height:1.45;color:var(--ink-2);padding-left:14px;position:relative}
+.win li::before{content:"";position:absolute;left:0;top:7px;width:5px;height:5px;background:var(--gold-deep);transform:rotate(45deg)}
 .para{margin:0;font-size:15px;line-height:1.6;color:var(--ink-2);max-width:68ch}
-.setup{display:flex;gap:1px;flex-wrap:wrap;background:var(--line-hard);margin-bottom:12px}
-.kv{background:var(--surface);padding:10px 15px;flex:1 1 165px}
-.kv .k{display:block;font-family:var(--mono);font-size:11.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3);margin-bottom:3px}
+.setup{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.kv{padding:10px 15px;flex:1 1 165px}
+.kv .k{display:block;font-family:var(--label);font-weight:600;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin-bottom:3px}
 .kv .v{font-size:14.5px;font-weight:500}
 .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:26px}
 
 /* -- notes -- */
 .note{border-left:2px solid var(--gold-deep);padding:2px 0 2px 13px;margin-bottom:12px}
-.note .d{font-family:var(--mono);font-size:12px;letter-spacing:.08em;color:var(--ink-3);display:block;margin-bottom:3px}
+.note .d{font-family:var(--label);font-weight:600;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);display:block;margin-bottom:3px}
 .note p{margin:0;font-size:14.5px;line-height:1.5;color:var(--ink-2);max-width:64ch}
 .empty-note{font-size:14px;color:var(--ink-3);font-style:italic;margin:0 0 12px}
 .noteform{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;max-width:70ch}
 .noteform input{flex:1 1 260px;min-width:0;background:var(--sunk);border:1px solid var(--line-hard);color:var(--ink);font-family:var(--sans);font-size:14.5px;padding:10px 12px}
 .noteform input::placeholder{color:var(--ink-3)}
-.noteform input:focus{border-color:var(--gold-deep)}
+.noteform input:focus{border-color:var(--gold)}
 
-.result{display:flex;gap:1px;background:var(--line-hard);width:max-content;margin-bottom:20px}
-.res{background:var(--surface);padding:9px 26px;font-family:var(--mono);font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);transition:color .14s,background .14s}
-.res:hover{color:var(--ink-2)}
-.res[aria-pressed="true"]{background:var(--raised)}
+.result{display:flex;gap:8px;width:max-content;margin-bottom:20px}
+.res{--c:6px;padding:9px 26px;font-family:var(--label);font-weight:600;font-size:13px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--ink-3);--edge:var(--rail);--fill:#04101C;transition:color .14s}
+.res:hover{color:var(--ink-2);--edge:var(--gold-deep);--fill:#1A1712}
+.res[aria-pressed="true"]{--edge:var(--gold);--fill:var(--raised)}
 .res.w[aria-pressed="true"]{color:var(--fav)} .res.l[aria-pressed="true"]{color:var(--enemy)}
 
-.proto{margin:34px 0 0;padding:12px 15px;background:var(--surface);border-left:2px solid var(--line-hard);font-size:13.5px;line-height:1.55;color:var(--ink-3);max-width:74ch}
+.proto{margin:34px 0 0;padding:12px 15px;background:#010A1380;border-left:2px solid var(--gold-deep);font-size:13.5px;line-height:1.55;color:var(--ink-3);max-width:74ch}
 .proto b{color:var(--ink-2);font-weight:600}
 
 @media (max-width:860px){
@@ -265,18 +410,19 @@ main.wide{width:100%;max-width:1320px;margin-inline:auto}
 
 /* page header shared by Settings and Data */
 .page-bar{align-items:flex-start;margin-bottom:18px}
-.page-title{font-family:var(--display);font-weight:700;font-size:24px;letter-spacing:.03em;line-height:1.1;margin:0 0 8px;color:var(--ink)}
+.page-title{font-family:var(--display);font-weight:700;font-size:25px;letter-spacing:.07em;text-transform:uppercase;line-height:1.1;margin:0 0 8px;color:var(--ink)}
 .page-bar .bar-cta{align-self:flex-end}
 
 /* panels: one surface per concern */
 /* Two columns at the full measure and one when narrow: three would leave a hole beside
    the last panel on every row. */
 .panels{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr));gap:14px;align-items:stretch}
-.panel{background:var(--surface);border:1px solid var(--line-hard);padding:16px 18px 18px;min-width:0}
+.panel{padding:16px 18px 18px;min-width:0}
 .panel.span{grid-column:1 / -1}
-.panel-head{display:flex;align-items:center;gap:12px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--line)}
-.panel-head h3{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--gold-deep);margin:0}
-.panel-meta{margin-left:auto;font-family:var(--mono);font-size:12px;letter-spacing:.06em;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.panel-head{display:flex;align-items:center;gap:12px;margin-bottom:10px;padding-bottom:8px;
+  background:linear-gradient(90deg,var(--gold-deep),#785A2800) left bottom/100% 1px no-repeat}
+.panel-head h3{position:relative;padding-left:16px;font-family:var(--label);font-size:12.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);margin:0}
+.panel-meta{margin-left:auto;font-family:var(--label);font-weight:600;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-variant-numeric:tabular-nums}
 .panel .subnote{margin:0 0 12px}
 .panel .subnote:last-child{margin-bottom:0}
 .panel .setting-row{margin-bottom:10px}
@@ -286,7 +432,7 @@ main.wide{width:100%;max-width:1320px;margin-inline:auto}
 /* The release folder is a long path next to a button: a row of its own, so the button
    keeps its edge instead of landing mid-sentence when the path wraps. */
 .srcrow{display:flex;align-items:center;gap:10px;margin:0 0 8px}
-.srcrow code{font-family:var(--mono);font-size:13px;color:var(--ink-2);min-width:0;overflow-wrap:anywhere}
+.srcrow code{font-family:var(--sans);font-size:13px;color:var(--ink-2);min-width:0;overflow-wrap:anywhere}
 .srcrow .mini{flex:none}
 
 .fieldrow{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin:0 0 8px}
@@ -295,59 +441,57 @@ main.wide{width:100%;max-width:1320px;margin-inline:auto}
 .fieldrow .mini{align-self:center}
 
 .flash{margin:0 0 16px;padding:9px 14px;font-size:14px;border-left:2px solid}
-.flash.good{background:#5FB8941A;border-color:var(--fav);color:var(--ink)}
-.flash.bad{background:#D9564B1A;border-color:var(--enemy);color:var(--ink)}
+.flash.good{background:#0AC8B91A;border-color:var(--fav);color:var(--ink)}
+.flash.bad{background:#E840571A;border-color:var(--enemy);color:var(--ink)}
 
-.statgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:1px;
-  background:var(--line-hard);margin-bottom:18px}
-.statcard{background:var(--surface);padding:13px 15px;display:flex;flex-direction:column;gap:3px}
-.statcard .k{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
-.statcard .v{font-family:var(--mono);font-weight:600;font-size:24px;line-height:1.1;
+.statgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:10px;margin-bottom:18px}
+.statcard{padding:13px 15px;display:flex;flex-direction:column;gap:3px}
+.statcard .k{font-family:var(--label);font-weight:600;font-size:11.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3)}
+.statcard .v{font-family:var(--display);font-weight:700;font-size:25px;line-height:1.1;
   font-variant-numeric:tabular-nums;color:var(--ink)}
-.statcard .v.small{font-size:14.5px;font-weight:500}
+.statcard .v.small{font-size:14.5px;font-weight:500;font-family:var(--sans)}
 .statcard .n{font-size:13px;color:var(--ink-3);line-height:1.35;overflow-wrap:anywhere}
 
-.pill{display:inline-block;font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;
-  text-transform:uppercase;padding:3px 8px;border:1px solid currentColor}
+.pill{display:inline-block;font-family:var(--label);font-weight:600;font-size:11.5px;letter-spacing:.11em;
+  text-transform:uppercase;padding:3px 9px;--edge:currentColor;--fill:#04101C}
 .pill.ok{color:var(--fav)} .pill.warn{color:var(--hard)}
 
 .actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px}
 
-.mini{font-family:var(--mono);font-size:12px;font-weight:500;letter-spacing:.09em;text-transform:uppercase;
-  color:var(--ink-2);border:1px solid var(--line-hard);padding:5px 11px;white-space:nowrap;
-  transition:color .14s,border-color .14s,background-color .14s}
-.mini:hover{color:var(--gold);border-color:var(--gold-deep);background:var(--gold-wash)}
-.mini.danger{color:var(--enemy);border-color:#D9564B66}
-.mini.danger:hover{color:#F0857B;border-color:var(--enemy)}
-.mini.go{color:var(--gold);border-color:var(--gold-deep)}
+.mini{--c:5px;font-family:var(--label);font-weight:600;font-size:12px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--gold);--edge:var(--gold-deep);--fill:#04101C;padding:6px 12px;white-space:nowrap;
+  transition:color .14s}
+.mini:hover{color:var(--ink);--edge:var(--gold);--fill:#1A1712}
+.mini.danger{color:var(--enemy);--edge:#8C2B34}
+.mini.danger:hover{color:#FF9B93;--edge:var(--enemy);--fill:#1E0D10}
+.mini.go{color:var(--gold)}
 
-.snaplist{display:flex;flex-direction:column;gap:1px;background:var(--line-hard)}
-.snaprow{display:grid;grid-template-columns:150px 1fr 70px auto;gap:12px;align-items:center;
-  background:var(--surface);padding:9px 14px}
-.snaprow .when{font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums;color:var(--ink-2)}
-.snaprow .why{font-family:var(--mono);font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
-.snaprow .why.keep{color:var(--gold-deep)}
-.snaprow .sz{font-family:var(--mono);font-size:13px;color:var(--ink-3);text-align:right;font-variant-numeric:tabular-nums}
+.snaplist{display:flex;flex-direction:column;gap:6px}
+.snaprow{display:grid;grid-template-columns:150px 1fr 70px auto;gap:12px;align-items:center;padding:9px 14px}
+.snaprow .when{font-family:var(--display);font-weight:600;font-size:13.5px;font-variant-numeric:tabular-nums;color:var(--ink-2)}
+.snaprow .why{font-family:var(--label);font-weight:600;font-size:12px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3)}
+.snaprow .why.keep{color:var(--gold)}
+.snaprow .sz{font-family:var(--display);font-weight:600;font-size:13.5px;color:var(--ink-3);text-align:right;font-variant-numeric:tabular-nums}
 .snaprow .act{display:flex;gap:6px;justify-content:flex-end}
 
 .notegroups{display:flex;flex-direction:column;gap:14px}
-.notegroup{background:var(--surface);border-left:2px solid var(--line-hard)}
-.notegroup-head{display:flex;align-items:baseline;gap:12px;padding:9px 14px;border-bottom:1px solid var(--line)}
-.notegroup-head .mu{font-family:var(--display);font-weight:600;font-size:15px;letter-spacing:.02em}
+.notegroup-head{display:flex;align-items:baseline;gap:12px;padding:9px 14px;
+  background:linear-gradient(90deg,var(--gold-deep),#785A2800) left bottom/100% 1px no-repeat}
+.notegroup-head .mu{font-family:var(--display);font-weight:700;font-size:15px;letter-spacing:.03em}
 .notegroup-head .mu em{font-style:normal;font-family:var(--sans);font-weight:400;font-size:13.5px;color:var(--ink-3)}
-.notegroup-head .ro{font-family:var(--mono);font-size:11.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3)}
-.notegroup-head .ct{margin-left:auto;font-family:var(--mono);font-size:13px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.notegroup-head .ro{font-family:var(--label);font-weight:600;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.notegroup-head .ct{margin-left:auto;font-family:var(--display);font-weight:600;font-size:13.5px;color:var(--ink-3);font-variant-numeric:tabular-nums}
 
 .noterow{display:grid;grid-template-columns:110px minmax(0,1fr) auto;gap:12px;align-items:start;
   padding:10px 14px;border-bottom:1px solid var(--line)}
 .noterow:last-child{border-bottom:0}
-.noterow .d{font-family:var(--mono);font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums;padding-top:2px}
-.noterow .d .ed{display:block;font-style:normal;font-size:11px;letter-spacing:.09em;
-  text-transform:uppercase;color:var(--gold-deep);margin-top:2px}
+.noterow .d{font-family:var(--label);font-weight:600;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-variant-numeric:tabular-nums;padding-top:2px}
+.noterow .d .ed{display:block;font-style:normal;font-size:11px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--gold);margin-top:2px}
 .noterow .b{margin:0;font-size:14.5px;line-height:1.5;color:var(--ink-2);overflow-wrap:anywhere}
 .noterow .act{display:flex;gap:6px;justify-content:flex-end}
 .noterow.editing{align-items:center}
-.noteedit{width:100%;background:var(--sunk);border:1px solid var(--gold-deep);color:var(--ink);
+.noteedit{width:100%;background:var(--sunk);border:1px solid var(--gold);color:var(--ink);
   font-family:var(--sans);font-size:14.5px;line-height:1.5;padding:8px 10px;resize:vertical}
 
 @media (max-width:700px){
@@ -362,54 +506,55 @@ main.wide{width:100%;max-width:1320px;margin-inline:auto}
 .clock .t.hot{color:var(--gold)}
 .slot.hover .port{opacity:.55}
 .slot.hover .nm{color:var(--ink-2)}
-.notice.quiet{border-left-color:var(--gold-deep)}
 .ellipsis::after{content:"…";display:inline-block;width:1.2em;text-align:left;animation:dots 1.4s steps(4,end) infinite}
 @keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"…"}}
 @media (prefers-reduced-motion:reduce){.ellipsis::after{animation:none;content:"…"}}
-.datalink[aria-current="true"]{color:var(--gold);border-color:var(--gold-deep)}
+.datalink[aria-current="true"]{color:var(--ink);--edge:var(--gold);--fill:#1A1712}
 
 /* ── settings ───────────────────────────────────────── */
 .field{appearance:none;background:var(--sunk);border:1px solid var(--line-hard);color:var(--ink);
   font-family:var(--sans);font-size:14.5px;padding:9px 12px;min-width:0;max-width:100%}
 select.field{min-width:220px}
 select.field{padding-right:30px;cursor:pointer;
-  background-image:linear-gradient(45deg,transparent 50%,var(--ink-3) 50%),linear-gradient(135deg,var(--ink-3) 50%,transparent 50%);
-  background-position:calc(100% - 14px) 16px,calc(100% - 10px) 16px;background-size:4px 4px,4px 4px;background-repeat:no-repeat}
-.field:focus{border-color:var(--gold-deep)}
+  background-image:linear-gradient(45deg,transparent 50%,var(--gold) 50%),linear-gradient(135deg,var(--gold) 50%,transparent 50%);
+  background-position:calc(100% - 14px) 17px,calc(100% - 10px) 17px;background-size:4px 4px,4px 4px;background-repeat:no-repeat}
+.field:focus{border-color:var(--gold)}
 .field::placeholder{color:var(--ink-3)}
 input.field[type="search"]{width:100%}
 input.field[type="search"]::-webkit-search-cancel-button{-webkit-appearance:none;width:10px;height:10px;cursor:pointer;
   background:linear-gradient(45deg,transparent 45%,var(--ink-3) 45%,var(--ink-3) 55%,transparent 55%),
              linear-gradient(135deg,transparent 45%,var(--ink-3) 45%,var(--ink-3) 55%,transparent 55%)}
 .setting-row{display:grid;grid-template-columns:110px minmax(0,1fr);gap:12px;align-items:center;margin-bottom:8px}
-.setting-row .k{font-family:var(--mono);font-size:12px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3)}
-.subnote code{font-family:var(--mono);font-size:13px;color:var(--ink-2)}
+.setting-row .k{font-family:var(--label);font-weight:600;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.subnote code{font-family:var(--sans);font-size:13px;color:var(--ink-2)}
 
 .chips{display:flex;flex-wrap:wrap;gap:8px}
-.chip-champ{display:inline-flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line-hard);padding:4px 6px 4px 4px}
-.chip-champ .port{width:30px;height:30px}
-.chip-champ .nm{font-family:var(--display);font-weight:600;font-size:13.5px;letter-spacing:.03em}
+.chip-champ{display:inline-flex;align-items:center;gap:8px;padding:4px 6px 4px 4px}
+.chip-champ .port{width:30px;height:30px;--c:4px;--frame:var(--gold-deep)}
+.chip-champ .nm{font-family:var(--display);font-weight:700;font-size:13.5px;letter-spacing:.05em;text-transform:uppercase}
 .chip-champ .x{font-size:16px;line-height:1;color:var(--ink-3);padding:0 4px}
 .chip-champ .x:hover{color:var(--enemy)}
 
 /* the roster: every champion, the pool lit up */
-.pool-tabs{width:max-content;margin:0 0 14px}
+.pool-tabs{width:max-content;margin:0 0 14px;gap:16px}
 .pool-search{display:flex;align-items:center;gap:14px;margin:16px 0 10px}
 .pool-search .field{max-width:320px}
-.pool-count{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap}
-.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:2px}
-.tile{display:flex;flex-direction:column;align-items:center;gap:5px;padding:8px 2px 7px;background:var(--ground);
-  text-align:center;position:relative;transition:background .12s ease}
-.tile:hover{background:var(--raised)}
-.tile .port{width:44px;height:44px;transition:filter .12s ease}
+.pool-count{font-family:var(--label);font-weight:600;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:4px}
+.tile{display:flex;flex-direction:column;align-items:center;gap:5px;padding:8px 2px 7px;
+  text-align:center;border-color:#1E2328;transition:border-color .12s ease,background-color .12s ease}
+.tile:hover{border-color:var(--gold-deep)}
+/* No frame on a roster portrait until it is in the pool: 173 framed squares inside 173
+   framed tiles is a box in a box, and the gold is what the eye is meant to find. */
+.tile .port{width:44px;height:44px;--frame:#1E2328;transition:filter .12s ease}
 .tile .nm{font-size:12px;font-weight:500;line-height:1.15;color:var(--ink-2);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tile[aria-pressed="true"]{background:var(--raised);box-shadow:inset 0 0 0 1px var(--gold-deep)}
-.tile[aria-pressed="true"] .port{box-shadow:0 0 0 1.5px var(--gold),0 0 14px -4px var(--gold)}
+.tile[aria-pressed="true"]{border-color:var(--gold-deep)}
+.tile[aria-pressed="true"] .port{--frame:var(--gold);filter:drop-shadow(0 0 6px #C8AA6E66)}
 .tile[aria-pressed="true"] .nm{color:var(--gold)}
 .tile[aria-pressed="true"]::after{content:"";position:absolute;top:5px;right:6px;width:5px;height:9px;
   border:solid var(--gold);border-width:0 1.5px 1.5px 0;transform:rotate(45deg)}
 .tile[aria-pressed="false"] .port{filter:saturate(.85)}
 
-.rolesel.unknown{color:var(--hard);border-color:#D97F3C66;font-style:italic}
+.rolesel.unknown{color:var(--hard);border-color:#C89B3C66;font-style:italic}
 .rolesel.guess{border-style:dashed}
 .h-cls .probable{color:var(--hard)}

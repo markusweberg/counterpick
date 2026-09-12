@@ -49,6 +49,23 @@ function clockLabel(): string {
   }
 }
 
+/**
+ * The window buttons. The app is frameless - there is no Windows caption above the page -
+ * so the topbar is both the nav and the title bar, and these three are the only way to
+ * minimise, maximise or close. Dragging is handled by the `app-region` in the stylesheet,
+ * which WebView2 hands straight to Windows; only the buttons need the host.
+ *
+ * Absent in the browser preview, where the tab already has its own.
+ */
+function windowButtons(): string {
+  if (!isHosted) return "";
+  return `<div class="winbtns">
+    <button class="winbtn" data-act="win-minimize" title="Minimise" aria-label="Minimise">&#xE921;</button>
+    <button class="winbtn" data-act="win-maximize" title="Maximise" aria-label="Maximise">&#xE922;</button>
+    <button class="winbtn close" data-act="win-close" title="Close" aria-label="Close">&#xE8BB;</button>
+  </div>`;
+}
+
 export function topbar(): string {
   const steps = STEPS.map(
     ([key, label]) =>
@@ -86,6 +103,7 @@ export function topbar(): string {
         <button class="step" data-act="data" title="Notes, backups and export"
           aria-current="${state.screen === "data"}">Data</button>
       </nav>
+      ${windowButtons()}
     </div>
   </header>`;
 }
@@ -105,11 +123,11 @@ export function hero(): string {
   const meSide = me
     ? `<div class="hero-side me" style="background-image:url(${splashUrl(me.key)});
          background-position:${me.splashPos}"></div>`
-    : `<div class="hero-side me" style="background:linear-gradient(120deg,#101B2A,#0B1119)"></div>`;
+    : `<div class="hero-side me" style="background:linear-gradient(120deg,#0E2338,#010A13)"></div>`;
   const foeSide = foeKey
     ? `<div class="hero-side foe" style="background-image:url(${splashUrl(foeKey)});
          background-position:${champion(foeKey).splashPos}"></div>`
-    : `<div class="hero-side foe" style="background:linear-gradient(120deg,#1A1013,#0B1119)"></div>`;
+    : `<div class="hero-side foe" style="background:linear-gradient(120deg,#2A1015,#010A13)"></div>`;
 
   // Where the role came from is the one thing worth shouting about: an autofill means
   // the board is scoring a lane you did not queue for.
@@ -225,12 +243,12 @@ export function board(): string {
 
   return `<section class="board">
     <div class="side-ally">
-      <div class="side-label"><span class="bar"></span> Your team</div>
+      <div class="side-label"><span class="tick"></span> Your team</div>
       <div class="row">${ally}</div>
     </div>
     <div class="vs">VS</div>
     <div class="side-enemy">
-      <div class="side-label"><span class="bar"></span> Enemy</div>
+      <div class="side-label"><span class="tick"></span> Enemy</div>
       <div class="row">${enemy}</div>
     </div>
   </section>`;
