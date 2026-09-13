@@ -9,7 +9,7 @@
     <RootNamespace>Counterpick.App</RootNamespace>
     <AssemblyName>Counterpick</AssemblyName>
     <!-- Bumped by tools/release.ps1; Velopack compares this to decide what is an update. -->
-    <Version>1.0.6</Version>
+    <Version>1.0.7</Version>
     <!-- Program.cs replaces the Main that App.xaml would generate; see the note there. -->
     <StartupObject>Counterpick.App.Program</StartupObject>
     <!-- English only; WPF would otherwise publish a dozen locale folders nobody reads. -->
