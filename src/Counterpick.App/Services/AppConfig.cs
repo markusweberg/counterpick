@@ -1,4 +1,6 @@
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -10,11 +12,54 @@ namespace Counterpick.App.Services;
 public sealed class AppConfig
 {
     /// <summary>
-    /// Anthropic API key. Local-file storage is deliberate and adequate while this is a
-    /// single-user app on your own machine. If Counterpick is ever shared, the key has to
-    /// move behind a backend instead - a shipped build cannot hold a key safely.
+    /// Anthropic API key, in memory only. Everyone who runs Counterpick brings their own key
+    /// and pays for their own calls; no build ever carries one. On disk it is written as
+    /// <see cref="ApiKeyProtected"/>, never in the clear.
     /// </summary>
+    [JsonIgnore]
     public string? ApiKey { get; set; }
+
+    /// <summary>
+    /// The key encrypted with Windows DPAPI for the current user: only this Windows account
+    /// on this machine can read it back. A config.json that leaks through a backup, a synced
+    /// folder or a copy to another PC carries a blob, not a key.
+    /// </summary>
+    public string? ApiKeyProtected
+    {
+        get => Protect(ApiKey);
+        set
+        {
+            if (string.IsNullOrEmpty(value)) return;
+            var key = Unprotect(value);
+            if (key is null) KeyUnreadable = true;
+            else ApiKey = key;
+        }
+    }
+
+    /// <summary>
+    /// A stored key that could not be decrypted - the config came from another machine or
+    /// another Windows account. The key is gone for good; Settings asks for it again.
+    /// </summary>
+    [JsonIgnore]
+    public bool KeyUnreadable { get; private set; }
+
+    /// <summary>
+    /// The plain-text key an older build wrote as "ApiKey". Read once, then the file is
+    /// rewritten encrypted by <see cref="Load"/>. Never written.
+    /// </summary>
+    [JsonPropertyName("ApiKey")]
+    public string? LegacyApiKey
+    {
+        get => null;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value)) return;
+            ApiKey ??= value;
+            _migrated = true;
+        }
+    }
+
+    private bool _migrated;
 
     /// <summary>
     /// Only needed for an organisation-level key, which the API refuses without an
@@ -52,6 +97,29 @@ public sealed class AppConfig
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
+    // Ties the blob to this app: another program running as the same user cannot decrypt
+    // it by calling DPAPI with no entropy. Not a secret, only a namespace.
+    private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("Counterpick.AnthropicApiKey.v1");
+
+    private static string? Protect(string? key) =>
+        string.IsNullOrEmpty(key)
+            ? null
+            : Convert.ToBase64String(ProtectedData.Protect(
+                Encoding.UTF8.GetBytes(key), Entropy, DataProtectionScope.CurrentUser));
+
+    private static string? Unprotect(string blob)
+    {
+        try
+        {
+            return Encoding.UTF8.GetString(ProtectedData.Unprotect(
+                Convert.FromBase64String(blob), Entropy, DataProtectionScope.CurrentUser));
+        }
+        catch (Exception ex) when (ex is CryptographicException or FormatException)
+        {
+            return null;
+        }
+    }
+
     public static AppConfig Load()
     {
         AppPaths.EnsureCreated();
@@ -64,8 +132,11 @@ public sealed class AppConfig
 
         try
         {
-            return JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(AppPaths.ConfigFile), Json)
-                   ?? new AppConfig();
+            var config = JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(AppPaths.ConfigFile), Json)
+                         ?? new AppConfig();
+            // An older build left the key in the clear; the first load takes it off disk.
+            if (config._migrated) config.Save();
+            return config;
         }
         catch (JsonException)
         {
@@ -81,5 +152,6 @@ public sealed class AppConfig
     {
         AppPaths.EnsureCreated();
         File.WriteAllText(AppPaths.ConfigFile, JsonSerializer.Serialize(this, Json));
+        KeyUnreadable = KeyUnreadable && ApiKey is null;
     }
 }

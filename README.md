@@ -73,6 +73,28 @@ not an install, so it cannot update itself; Settings says so.
 Updating never touches your data - not `%APPDATA%\Counterpick`, not
 `Documents\Counterpick` - and neither does uninstalling.
 
+### Sharing it
+
+Hand a friend `Counterpick-win-Setup.exe`. Each person uses **their own Anthropic API key**
+and pays for their own calls - about 10 cents a game (the first real draft cost 9).
+
+- They create a key at [console.anthropic.com](https://console.anthropic.com), add credit,
+  and **set a monthly spend limit** on it there. Then paste it under Settings.
+- **Never give anyone your key**, and never bake one into a build. Anything inside a desktop
+  app can be pulled out, and whoever has the key spends on its account without limit. A
+  build carries no key today - it is only ever typed into Settings - keep it that way.
+- The key is stored in `%APPDATA%\Counterpick\config.json` encrypted with Windows DPAPI
+  (`AppConfig.cs`): only the same Windows account on the same machine can read it. A
+  `config.json` copied to another PC or leaked through a backup carries an unreadable blob;
+  Settings then asks for the key again. A plain-text key left by an older build is
+  encrypted on the next launch.
+- The trace log under `%APPDATA%\Counterpick\logs` never contains the key, so a friend can
+  send you one for debugging. It does contain their draft payloads.
+
+If you ever want to pay for everyone instead, the key must move behind a small backend
+(a proxy that holds it, identifies each caller, and caps their usage). That is a different
+app; don't do it by shipping the key.
+
 ### Working on the UI
 
 For hot reload while styling, run the Vite dev server and start the app in Debug:
@@ -140,7 +162,7 @@ The two databases are deliberately separate, because only one of them matters:
 |---|---|---|
 | `Documents\Counterpick\counterpick.db` | **Your** pool, matchup notes, game results | **No. Synced and backed up.** |
 | `cache.db` | Claude's generated briefs | Yes, for pennies. Never backed up |
-| `config.json` | API key, model, primary role | Retype it |
+| `config.json` | API key (encrypted to your Windows account), model, primary role | Retype it |
 | `backups/` | Timestamped snapshots of `counterpick.db` | — |
 | `exports/` | `notes.json` and `notes.md` | Regenerated on demand |
 | `cache/`, `webview/` | Data Dragon art, WebView2 profile | Safe to delete |
@@ -205,9 +227,10 @@ Destructive buttons confirm in place rather than opening a dialog.
 dotnet run --project tests/Counterpick.DataTests
 ```
 
-152 checks: the data-safety path (snapshots, WAL correctness, the OneDrive mirror,
+168 checks: the data-safety path (snapshots, WAL correctness, the OneDrive mirror,
 export, import idempotency, restore-without-loss, fresh-machine recovery, note editing
-and deletion, the separation between your notes and the disposable cache) plus the pure
+and deletion, the separation between your notes and the disposable cache, the API key
+never written in the clear) plus the pure
 half of the League client listener (endpoint parsing, the champion catalog, and the
 session-to-draft mapper against a captured-shape payload, and the open field a role
 offers). They run
@@ -238,8 +261,8 @@ champions and art updates arrive without a rebuild.
 - Desktop app with live LCU auto-detect, rather than typing the enemy picks in.
 - Briefs are cached per `(your champ, enemy champ, role)` so repeat matchups are instant
   and free; the pool can be pre-warmed against common opponents offline.
-- The API key sits in local user config. Fine while this is single-user. **Revisit before
-  sharing the app with anyone** — a shared build needs a backend to hold the key.
+- **Everyone brings their own API key.** There is no shared key and no backend; see
+  [Sharing it](#sharing-it). The key is encrypted with Windows DPAPI in `config.json`.
 
 ## Status
 

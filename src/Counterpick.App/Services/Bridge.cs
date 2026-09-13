@@ -245,6 +245,7 @@ public sealed class Bridge
     private object ConfigView() => new
     {
         hasApiKey = _claude.HasApiKey,
+        keyUnreadable = _config.KeyUnreadable,
         workspaceId = _config.WorkspaceId ?? "",
         model = _config.Model,
         shortlistModel = _config.ShortlistModel,

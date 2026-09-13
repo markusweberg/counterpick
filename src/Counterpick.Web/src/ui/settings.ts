@@ -164,7 +164,9 @@ export function settingsView(): string {
     ? `<span class="pill warn">Browser preview</span>`
     : c?.hasApiKey
       ? `<span class="pill ok">Key set</span>`
-      : `<span class="pill warn">No key yet</span>`;
+      : c?.keyUnreadable
+        ? `<span class="pill warn">Enter it again</span>`
+        : `<span class="pill warn">No key yet</span>`;
 
   const onRole = state.live && state.assignedRole
     ? ` Right now the client has you on ${state.assignedRole.toLowerCase()}${state.autofilled ? ", autofilled" : ""}.`
@@ -174,9 +176,9 @@ export function settingsView(): string {
       <div>
         <p class="eyebrow">Counterpick · this machine</p>
         <h2 class="page-title">Settings</h2>
-        <p class="subnote">The key lives in <code>%APPDATA%\\Counterpick\\config.json</code>;
-          your pool and notes live in <code>Documents\\Counterpick</code>, where OneDrive syncs
-          them. Nothing is sent anywhere but the API.</p>
+        <p class="subnote">The key lives in <code>%APPDATA%\\Counterpick\\config.json</code>, encrypted
+          to your Windows account; your pool and notes live in <code>Documents\\Counterpick</code>,
+          where OneDrive syncs them. Nothing is sent anywhere but the API.</p>
       </div>
       <div class="bar-cta"><button class="ghost" data-act="back">← Back to draft</button></div>
     </div>
@@ -192,7 +194,13 @@ export function settingsView(): string {
           <button type="submit" class="ghost">Save</button>
           ${c?.hasApiKey ? `<button type="button" class="mini danger" data-act="key-clear">Remove</button>` : ""}
         </form>
-        <p class="subnote">Pays for the shortlist and the briefs. A key made inside a workspace needs nothing else.</p>
+        ${c?.keyUnreadable && !c?.hasApiKey
+          ? `<p class="subnote">A key was saved, but not by this Windows account on this machine, so it
+              cannot be read. Paste it again.</p>`
+          : ""}
+        <p class="subnote">Your own key, billed to your own Anthropic account - about 10 cents a game.
+          Create one at <code>console.anthropic.com</code> and set a monthly spend limit on it there.
+          Never use a key someone else gave you. A key made inside a workspace needs nothing else.</p>
         <form class="fieldrow" id="workspaceForm">
           <label for="workspaceInput" hidden>Workspace id</label>
           <input id="workspaceInput" class="field grow" name="workspaceId" type="text" autocomplete="off" spellcheck="false"

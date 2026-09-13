@@ -24,9 +24,10 @@ piece up cold.
 | **Following the role the client assigns you** | Done 2026-09-11, tested against the fixtures; not yet seen in a live autofill |
 | **Enemy roles from play rates, confirmed by the running game** | Done 2026-09-11, seen live the same evening: every placement right, confirmed 8 s into loading |
 | Trace log under `%APPDATA%\Counterpick\logs` | Done: events, mapped drafts, Claude timings, raw payloads |
-| Tests | 152 checks, including real captured payloads and the play-rate snapshot |
+| Tests | 168 checks, including real captured payloads, the play-rate snapshot and the key encryption |
 | **Installer and self-update** | Done 2026-09-12: Velopack, `tools/release.ps1`, Updates panel in Settings |
 | **Pool-blind picks: the best champion in the role, whatever you play** | Done 2026-09-12, in the same shortlist call; not yet seen in a live draft |
+| **Shareable: bring-your-own key, encrypted with DPAPI** | Done 2026-09-13; see "Decisions to revisit" and the README's "Sharing it" |
 
 The worked example in `src/Counterpick.Web/src/data/scenario.ts` now only appears in a
 plain browser (`npm run dev` outside the app). Inside the app everything starts empty and
@@ -385,10 +386,14 @@ first is useful or just noise, and whether three is the right number.
 
 ## Decisions to revisit
 
-- **The API key sits in `%APPDATA%\Counterpick\config.json` in plain text.** Correct for
-  a single user on their own machine. **If this is ever shared with anyone, that has to
-  change** - a distributed build cannot hold a key safely, and it would need a small
-  backend instead. Flagged, accepted, and deliberately deferred.
+- **Sharing: everyone brings their own key.** Decided 2026-09-13. Friends install the same
+  Setup, paste their own Anthropic key and pay for their own calls; no build carries a key
+  and there is no backend. The key is encrypted with DPAPI (current user, app-specific
+  entropy) as `ApiKeyProtected` in `config.json`; a plain `ApiKey` from an older build is
+  encrypted on the next load; a blob from another machine or account sets `KeyUnreadable`
+  and Settings asks for the key again. Tested in the "config" section of the data tests.
+  **If paying for everyone is ever wanted**, that needs a proxy holding one key with
+  per-user auth and caps - never a key shipped in the build.
 - **Models default to Opus 5 for briefs and Sonnet 5 for the shortlist.** Both are
   changeable under Settings. A config file written by the previous build keeps its
   `model` value, so an existing install stays on whatever it had.
@@ -402,7 +407,7 @@ first is useful or just noise, and whether three is the right number.
 ```
 dotnet build                                    # builds C# and the frontend
 dotnet run --project src/Counterpick.App        # launch
-dotnet run --project tests/Counterpick.DataTests # 152 checks
+dotnet run --project tests/Counterpick.DataTests # 168 checks
 ```
 
 For UI work with hot reload, run `npm run dev` in `src/Counterpick.Web` and start a Debug

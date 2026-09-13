@@ -6,12 +6,16 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Counterpick.DataTests</RootNamespace>
+    <!-- AppConfig uses DPAPI, which is Windows-only; so are the app and these tests. -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
     <!-- Run with: dotnet run (from this folder), or from the repo root with the
          project flag pointing at tests/Counterpick.DataTests -->
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <!-- DPAPI for AppConfig; the app gets it from the Windows desktop framework. -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />
   </ItemGroup>
 
   <ItemGroup>
@@ -21,6 +25,7 @@
       Bridge.cs is the only service that needs WebView2, so it stays out.
     -->
     <Compile Include="..\..\src\Counterpick.App\Services\AppPaths.cs" />
+    <Compile Include="..\..\src\Counterpick.App\Services\AppConfig.cs" />
     <Compile Include="..\..\src\Counterpick.App\Services\Storage.cs" />
     <Compile Include="..\..\src\Counterpick.App\Services\BriefCache.cs" />
     <Compile Include="..\..\src\Counterpick.App\Services\BackupService.cs" />

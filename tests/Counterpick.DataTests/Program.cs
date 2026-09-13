@@ -688,6 +688,35 @@ stranger["activePlayer"]!["summonerName"] = "Somebody";
 Check("not finding yourself in the list yields nothing", LiveGameMapper.Map(stranger, catalog) is null);
 Check("an empty payload yields nothing", LiveGameMapper.Map(System.Text.Json.Nodes.JsonNode.Parse("{}"), catalog) is null);
 
+// ── API key: encrypted at rest ───────────────────────────────────────────
+// Everyone brings their own key, and config.json must never hold it in the clear.
+Console.WriteLine("\nconfig. the API key on disk");
+const string fakeKey = "sk-ant-test-0123456789abcdef";
+var keyed = AppConfig.Load();
+keyed.ApiKey = fakeKey;
+keyed.Save();
+var onDisk = File.ReadAllText(AppPaths.ConfigFile);
+Check("the key is not written in the clear", !onDisk.Contains(fakeKey));
+Check("an encrypted blob is written instead", onDisk.Contains("\"ApiKeyProtected\""));
+Check("no plain ApiKey field is written", !onDisk.Contains("\"ApiKey\""));
+var reloaded = AppConfig.Load();
+Check("the key reads back on the same account", reloaded.ApiKey == fakeKey && !reloaded.KeyUnreadable);
+
+File.WriteAllText(AppPaths.ConfigFile, $$"""{ "ApiKey": "{{fakeKey}}", "PrimaryRole": "Mid" }""");
+var migrated = AppConfig.Load();
+var afterMigration = File.ReadAllText(AppPaths.ConfigFile);
+Check("a plain key from an older build is read", migrated.ApiKey == fakeKey && migrated.PrimaryRole == "Mid");
+Check("and the file is rewritten without it", !afterMigration.Contains(fakeKey) && afterMigration.Contains("\"ApiKeyProtected\""));
+
+File.WriteAllText(AppPaths.ConfigFile, """{ "ApiKeyProtected": "AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAA", "PrimaryRole": "Jungle" }""");
+var foreign = AppConfig.Load();
+Check("a blob from another machine yields no key and says so",
+      foreign.ApiKey is null && foreign.KeyUnreadable && foreign.PrimaryRole == "Jungle");
+
+migrated.ApiKey = null;
+migrated.Save();
+Check("removing the key removes the blob", !File.ReadAllText(AppPaths.ConfigFile).Contains("ApiKeyProtected"));
+
 Console.WriteLine($"\n{passed} passed, {failed} failed");
 try { Directory.Delete(sandbox, recursive: true); } catch { /* sqlite may still hold handles */ }
 return failed == 0 ? 0 : 1;

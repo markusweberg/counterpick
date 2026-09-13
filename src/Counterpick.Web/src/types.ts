@@ -168,6 +168,8 @@ export interface DraftSummary {
 
 export interface AppConfigView {
   hasApiKey: boolean;
+  /** A key was saved but cannot be decrypted here (another machine or Windows account). */
+  keyUnreadable: boolean;
   /** Empty unless the key is organisation-level and needs the workspace header. */
   workspaceId: string;
   model: string;

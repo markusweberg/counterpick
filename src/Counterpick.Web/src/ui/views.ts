@@ -190,7 +190,7 @@ export function draftView(): string {
 
   if (blocker === "key") {
     body = notice("Add your Anthropic API key",
-      "Recommendations and briefs come from Claude, and there is no key yet. It is stored on this machine only.",
+      "Recommendations and briefs come from Claude, on your own key and your own Anthropic account. It is stored on this machine only, encrypted to your Windows account.",
       `<button class="ghost" data-act="settings">Open settings</button>`);
   } else if (blocker === "pool") {
     const lane = state.role.toLowerCase();
