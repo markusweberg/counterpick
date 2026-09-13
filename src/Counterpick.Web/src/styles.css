@@ -119,11 +119,26 @@ body::after{content:"";position:fixed;inset:0;z-index:60;pointer-events:none;opa
 /* Aligned on the baseline, not on the middle of each box. The bar carries five different
    text sizes - the 16px wordmark, 13px tabs, 12.5px status, the 20px clock and its 12px
    label - and centring boxes that size leaves every one of them sitting on a slightly
-   different line. Caps set in a serif make that stagger obvious. */
-.topbar{position:relative;display:flex;align-items:baseline;gap:22px;flex-wrap:wrap;
+   different line. Caps set in a serif make that stagger obvious.
+   Sticky, because it is the only thing you can drag the window by: scrolled out of view
+   on a long Settings or Data page, it would leave nothing to grab. */
+.topbar{position:sticky;top:0;z-index:50;display:flex;align-items:baseline;gap:22px;flex-wrap:wrap;
   padding:7px 20px 8px;background:linear-gradient(180deg,#0A1428 0%,#010A13 100%);
   app-region:drag;-webkit-app-region:drag}
 .topbar button,.topbar select,.topbar .winbtns{app-region:no-drag;-webkit-app-region:no-drag}
+/* The resize edges. The web view covers the whole window, border included, so Windows
+   never sees the mouse along the sides and bottom and cannot offer a resize there. These
+   show the cursor, and a press on one asks the host to start the system's own sizing loop
+   (MainWindow.StartResize). The top edge needs none: it sits in the caption, which Windows
+   does see. Narrow on the right to stay within the scrollbar's transparent rim. */
+.grip{position:fixed;z-index:70}
+.grip.l{left:0;top:0;bottom:0;width:4px;cursor:ew-resize}
+.grip.r{right:0;top:0;bottom:0;width:4px;cursor:ew-resize}
+.grip.b{left:0;right:0;bottom:0;height:4px;cursor:ns-resize}
+.grip.bl{left:0;bottom:0;width:12px;height:12px;cursor:nesw-resize}
+.grip.br{right:0;bottom:0;width:12px;height:12px;cursor:nwse-resize}
+/* Maximised there is nothing to resize, so the cursor should not promise it. */
+.maximized .grip{display:none}
 /* The seam under a band is a light bleed, brightest at the middle, gone at both edges -
    never a ruled line from corner to corner. */
 .topbar::after,.board::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;

@@ -210,8 +210,8 @@ public sealed class Bridge
 
         // ── window ──────────────────────────────────────────────────────
         // The window is frameless, so the page draws the caption buttons and these three
-        // are what they do. Dragging and edge-resizing are not here: WindowChrome and the
-        // page's app-region give those straight to Windows.
+        // are what they do. Dragging is not here: WindowChrome and the page's app-region
+        // give that straight to Windows. Edge resizing is, see MainWindow.StartResize.
         "window.minimize" => Run(() => Host().WindowState = WindowState.Minimized),
 
         "window.maximize" => Run(() =>
@@ -223,6 +223,12 @@ public sealed class Bridge
         }),
 
         "window.close" => Run(() => Host().Close()),
+
+        // A press on one of the page's edge grips: left, right, bottom, bottomleft, bottomright.
+        "window.startResize" => Run(() =>
+        {
+            if (Host() is MainWindow w) w.StartResize(Req(p, "edge"));
+        }),
 
         // How tall the page's own title bar is. WindowChrome needs the number to know
         // which strip of the window is caption; the page is the only thing that knows it.

@@ -177,6 +177,46 @@ public partial class MainWindow : Window
         chrome.CaptionHeight = wanted;
     }
 
+    private const int WM_NCLBUTTONDOWN = 0x00A1;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool ReleaseCapture();
+
+    /// <summary>
+    /// Start a native resize from the page's edge grips. The web view covers the window's
+    /// resize border, so Windows never sees the mouse there and WindowChrome cannot offer
+    /// the edge itself. The page catches the press instead and this hands it to Windows as
+    /// if it had landed on the border - from there it is the system's own sizing loop, snap
+    /// and minimum size included.
+    ///
+    /// Posted rather than run inline: the sizing loop is modal and would hold the bridge
+    /// reply until the mouse is released.
+    /// </summary>
+    public void StartResize(string edge)
+    {
+        if (WindowState != WindowState.Normal) return;
+        var hit = edge switch
+        {
+            "left" => 10,         // HTLEFT
+            "right" => 11,        // HTRIGHT
+            "bottom" => 15,       // HTBOTTOM
+            "bottomleft" => 16,   // HTBOTTOMLEFT
+            "bottomright" => 17,  // HTBOTTOMRIGHT
+            _ => 0,
+        };
+        if (hit == 0) return;
+
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        _ = Dispatcher.InvokeAsync(() =>
+        {
+            ReleaseCapture();
+            SendMessage(hwnd, WM_NCLBUTTONDOWN, (IntPtr)hit, IntPtr.Zero);
+        });
+    }
+
     /// <summary>
     /// Capture whatever was written this session before the process goes away.
     /// </summary>

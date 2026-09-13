@@ -40,6 +40,31 @@ function syncCaptionHeight(): void {
 
 window.addEventListener("resize", () => requestAnimationFrame(syncCaptionHeight));
 
+// The resize edges (see .grip in the stylesheet). Outside #app so a render never drops them.
+if (isHosted) {
+  document.body.insertAdjacentHTML(
+    "beforeend",
+    `<div class="grip l" data-edge="left"></div><div class="grip r" data-edge="right"></div>
+     <div class="grip b" data-edge="bottom"></div>
+     <div class="grip bl" data-edge="bottomleft"></div><div class="grip br" data-edge="bottomright"></div>`,
+  );
+  document.addEventListener("pointerdown", (e) => {
+    const edge = (e.target as HTMLElement).closest<HTMLElement>(".grip")?.dataset.edge;
+    if (!edge || e.button !== 0) return;
+    e.preventDefault();
+    void call("window.startResize", { edge }).catch(() => {});
+  });
+  // A maximised window fills the screen edge to edge; there the grips would only cover
+  // page content and promise a resize that cannot happen.
+  const syncMaximized = () =>
+    document.documentElement.classList.toggle(
+      "maximized",
+      window.outerWidth >= screen.availWidth && window.outerHeight >= screen.availHeight,
+    );
+  window.addEventListener("resize", syncMaximized);
+  syncMaximized();
+}
+
 function render(focusNote = false): void {
   paint(focusNote);
   syncCaptionHeight();
