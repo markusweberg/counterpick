@@ -106,6 +106,8 @@ export interface AppState {
   yourTurn: boolean;
   /** Your own hover, before you lock. */
   hoverKey: string | null;
+  /** Why the client refused the last lock-in. Cleared on the next try or a lock. */
+  lockError: string | null;
 }
 
 export const emptyDataState = (): DataState => ({
@@ -180,6 +182,7 @@ export const state: AppState = {
   timerPhase: "",
   yourTurn: false,
   hoverKey: null,
+  lockError: null,
 };
 
 /** Whichever enemy champion is assigned to your role. Null if none is. */

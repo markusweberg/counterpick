@@ -237,6 +237,7 @@ export function draftView(): string {
         </div>
         <div class="bar-cta">
           <button class="lock" data-act="lock">Lock in ${esc(champion(selected).name)}</button>
+          ${state.lockError ? `<p class="subnote" style="color:var(--enemy)">${esc(state.lockError)}</p>` : ""}
         </div>
       </div>
       <div class="recs">${cards}</div>

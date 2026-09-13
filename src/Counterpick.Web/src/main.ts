@@ -360,7 +360,17 @@ app.addEventListener("click", (e) => {
     case "lock": {
       // The button names the top recommendation when nothing has been clicked; lock that.
       const key = state.selected ?? state.recommendations[0]?.championKey;
-      if (key) lockIn(key);
+      if (!key) return;
+      // In a live draft the client does the locking; its session update moves the app on.
+      if (state.live && isHosted) {
+        state.lockError = null;
+        void call("draft.lockIn", { championKey: key }).catch((e: Error) => {
+          state.lockError = e.message;
+          render();
+        });
+        return render();
+      }
+      lockIn(key);
       return;
     }
     case "after":

@@ -277,6 +277,7 @@ export function lockIn(championKey: string): void {
   state.picked = championKey;
   state.selected = championKey;
   state.phase = "locked";
+  state.lockError = null;
   if (isHosted) briefIfSettled(championKey);
   rerender();
 }

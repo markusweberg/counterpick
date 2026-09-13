@@ -56,6 +56,23 @@ public sealed class LcuClient : IDisposable
         return body.Length == 0 ? null : JsonNode.Parse(body);
     }
 
+    /// <summary>
+    /// PATCH a JSON body. A refusal throws with the client's own message, which is the
+    /// one worth showing ("Invalid action", "Champion not owned", ...).
+    /// </summary>
+    public async Task PatchAsync(string path, JsonNode body, CancellationToken ct = default)
+    {
+        using var content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
+        using var response = await _http.PatchAsync(path.TrimStart('/'), content, ct);
+        if (response.IsSuccessStatusCode) return;
+
+        var text = await response.Content.ReadAsStringAsync(ct);
+        string? message = null;
+        try { message = JsonNode.Parse(text)?["message"]?.GetValue<string>(); }
+        catch (Exception e) when (e is JsonException or InvalidOperationException) { }
+        throw new InvalidOperationException($"The League client refused: {message ?? response.StatusCode.ToString()}");
+    }
+
     /// <summary>"None", "Lobby", "Matchmaking", "ChampSelect", "InProgress", "EndOfGame", ...</summary>
     public async Task<string> GetGameflowPhaseAsync(CancellationToken ct = default)
     {

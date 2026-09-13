@@ -139,6 +139,8 @@ public sealed class Bridge
         // ── live draft ──────────────────────────────────────────────────
         "draft.subscribe" => new { status = _watcher.Status, draft = _watcher.CurrentDraft },
 
+        "draft.lockIn" => _watcher.LockInAsync(Req(p, "championKey")),
+
         // ── enemy roles ─────────────────────────────────────────────────
         "roles.infer" => InferRolesAsync(p),
 

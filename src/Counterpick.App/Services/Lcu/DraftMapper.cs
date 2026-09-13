@@ -11,6 +11,9 @@ namespace Counterpick.App.Services.Lcu;
 public sealed record DraftSlot(string? ChampionKey, string Role, bool IsYou, bool OnTheClock, bool Hovering,
                                bool RoleKnown);
 
+/// <summary>Your pick action still to be made, and whether the clock is on it now.</summary>
+public sealed record PickAction(int Id, bool InProgress);
+
 /// <summary>
 /// The live draft as the UI consumes it. Everything the web side needs to render the
 /// board, run the clock, and decide when to re-score.
@@ -135,6 +138,24 @@ public static class DraftMapper
             EnemyPicksRemaining: enemyRemaining,
             YourRole: me is { RoleKnown: true } ? me.Role : null,
             Autofilled: meMember?["isAutofilled"]?.GetValue<bool>() ?? false);
+    }
+
+    /// <summary>
+    /// The pick action a lock-in completes: the local player's first pick not yet
+    /// completed. Null once you have locked, or in a session with no pick for you.
+    /// </summary>
+    public static PickAction? YourPickAction(JsonNode session)
+    {
+        var localCell = session["localPlayerCellId"]?.GetValue<int>() ?? -1;
+        foreach (var round in session["actions"]?.AsArray() ?? [])
+        foreach (var action in round?.AsArray() ?? [])
+        {
+            if (action?["type"]?.GetValue<string>() != "pick") continue;
+            if ((action["actorCellId"]?.GetValue<int>() ?? -1) != localCell) continue;
+            if (action["completed"]?.GetValue<bool>() ?? false) continue;
+            return new PickAction(action["id"]!.GetValue<int>(), action["isInProgress"]?.GetValue<bool>() ?? false);
+        }
+        return null;
     }
 
     private static List<DraftSlot> MapTeam(JsonArray team, ChampionCatalog catalog, int localCell,

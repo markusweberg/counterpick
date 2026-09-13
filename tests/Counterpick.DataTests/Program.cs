@@ -495,6 +495,13 @@ Check("a real lock is reported as a lock",
       lockedIn is { LockedKey: "Darius", HoverKey: null, YourTurn: false, TimerPhase: "FINALIZATION" });
 Check("after locking, the hero seat shows the champion", lockedIn?.Ally[0].ChampionKey == "Darius");
 
+System.Text.Json.Nodes.JsonNode Raw(string name) => System.Text.Json.Nodes.JsonNode.Parse(
+    File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "fixtures", name)))!;
+Check("lock-in finds your pick action on the clock",
+      DraftMapper.YourPickAction(Raw("session-custom-hover-none.json")) is { Id: 0, InProgress: true });
+Check("once locked there is no pick left to lock",
+      DraftMapper.YourPickAction(Raw("session-custom-locked.json")) is null);
+
 // A normal draft (queue 400), captured 2026-09-11. Your team has assigned positions; the
 // enemy side has none at all, so their roles are unknown until inferred. Ten bans, all
 // in the actions and none in the summary object.

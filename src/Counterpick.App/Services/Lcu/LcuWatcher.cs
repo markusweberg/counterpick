@@ -27,6 +27,8 @@ public sealed class LcuWatcher : IDisposable
     private readonly CancellationTokenSource _cts = new();
     private Task? _loop;
     private CancellationTokenSource? _gameCts;
+    /// <summary>The connected client, for the few calls that write to it. Null while offline.</summary>
+    private volatile LcuClient? _client;
 
     public ClientStatus Status { get; private set; } = new(false, "Offline");
     public DraftPayload? CurrentDraft { get; private set; }
@@ -63,6 +65,7 @@ public sealed class LcuWatcher : IDisposable
                 Trace.Write("lcu", $"catalog ready: Data Dragon {_catalog.Version}, {_catalog.Champions.Count} champions");
 
                 using var client = new LcuClient(endpoint);
+                _client = client;
                 var phase = await client.GetGameflowPhaseAsync(ct);
                 SetStatus(new ClientStatus(true, phase));
                 SyncGamePoll(phase);
@@ -94,7 +97,35 @@ public sealed class LcuWatcher : IDisposable
                 await Delay(backoff, ct);
                 backoff = TimeSpan.FromSeconds(Math.Min(30, backoff.TotalSeconds * 2));
             }
+            finally
+            {
+                _client = null;
+            }
         }
+    }
+
+    /// <summary>
+    /// Lock <paramref name="championKey"/> in on the client. Reads the session fresh rather
+    /// than trusting the last event, so the action id is the one the client expects now.
+    /// The client's session update that follows is what moves the app into the brief.
+    /// </summary>
+    public async Task<object?> LockInAsync(string championKey)
+    {
+        var client = _client ?? throw new InvalidOperationException("The League client is not connected.");
+        await _catalog.EnsureLoadedAsync();
+        var champion = _catalog.ByKey(championKey)
+                       ?? throw new ArgumentException($"Unknown champion '{championKey}'.");
+
+        var session = await client.GetChampSelectSessionAsync()
+                      ?? throw new InvalidOperationException("You are not in champ select.");
+        var action = DraftMapper.YourPickAction(session)
+                     ?? throw new InvalidOperationException("You have no pick left to lock in.");
+        if (!action.InProgress) throw new InvalidOperationException("It is not your turn to pick yet.");
+
+        Trace.Write("lcu", $"locking in {championKey} (action {action.Id})");
+        await client.PatchAsync($"/lol-champ-select/v1/session/actions/{action.Id}",
+                                new JsonObject { ["championId"] = champion.NumericId, ["completed"] = true });
+        return null;
     }
 
     private Task OnEvent(LcuEvent evt)
