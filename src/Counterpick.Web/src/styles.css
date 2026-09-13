@@ -236,7 +236,9 @@ body::after{content:"";position:fixed;inset:0;z-index:60;pointer-events:none;opa
 .side-enemy .port{--frame:#4A3C42}
 .slot.you .port{--frame:var(--gold);filter:drop-shadow(0 0 7px #C8AA6E55)}
 .slot.lane .port{--frame:var(--enemy);filter:drop-shadow(0 0 6px #E8405744)}
-.slot .nm{font-family:var(--display);font-weight:600;font-size:13px;letter-spacing:.05em;text-transform:uppercase;line-height:1.2;
+/* line-height in px, not em: the .long and .pending names are set smaller, and an em line
+   box shrank with them, lifting that slot's role select 2px above its neighbours'. */
+.slot .nm{font-family:var(--display);font-weight:600;font-size:13px;letter-spacing:.05em;text-transform:uppercase;line-height:16px;
   white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .slot .nm.long{font-size:11px;letter-spacing:0}
 .slot .rl{font-family:var(--label);font-weight:600;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
