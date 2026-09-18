@@ -61,7 +61,9 @@ $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $csproj = Join-Path $root 'src\Counterpick.App\Counterpick.App.csproj'
 $icon = Join-Path $root 'src\Counterpick.App\Resources\counterpick.ico'
-$publish = Join-Path $root 'artifacts\publish'
+# Not $publish: PowerShell variable names are case-insensitive, so that name is the
+# -Publish switch above and assigning a path to it fails before anything runs.
+$publishDir = Join-Path $root 'artifacts\publish'
 if (-not $Out) { $Out = Join-Path $root 'artifacts\releases' }
 $Out = [IO.Path]::GetFullPath($Out)
 
@@ -121,15 +123,15 @@ if (-not (Get-Command vpk -ErrorAction SilentlyContinue)) {
 }
 
 # ── publish ──────────────────────────────────────────────────────────────
-if (Test-Path $publish) { Remove-Item $publish -Recurse -Force }
-Write-Host "Publishing to $publish ..."
-dotnet publish $csproj -c Release -r win-x64 --self-contained -o $publish "-p:UpdateSource=$updateSource" --nologo -v quiet
+if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force }
+Write-Host "Publishing to $publishDir ..."
+dotnet publish $csproj -c Release -r win-x64 --self-contained -o $publishDir "-p:UpdateSource=$updateSource" --nologo -v quiet
 if ($LASTEXITCODE) { throw 'dotnet publish failed' }
 
 # ── pack ─────────────────────────────────────────────────────────────────
 New-Item -ItemType Directory -Force $Out | Out-Null
 Write-Host "Packing into $Out ..."
-vpk pack -u Counterpick -v $Version -p $publish -e Counterpick.exe -o $Out `
+vpk pack -u Counterpick -v $Version -p $publishDir -e Counterpick.exe -o $Out `
   --packTitle Counterpick --packAuthors 'Markus Weberg' --icon $icon
 if ($LASTEXITCODE) { throw 'vpk pack failed' }
 
