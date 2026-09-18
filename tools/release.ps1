@@ -102,10 +102,12 @@ if ($Version) {
 }
 
 # A tag that already exists means this version went out once already; packing over it
-# would publish a second, different build under the same number.
+# would publish a second, different build under the same number. Ask the remote, not the
+# local tag list: vpk creates the tag server-side when it publishes, so a machine that
+# has not fetched since - including the one that cut the last release - looks innocent.
 if ($Publish) {
-  $existing = (git -C $root tag --list "v$Version" | Out-String).Trim()
-  if ($existing) { throw "v$Version is already tagged. Pick a new version." }
+  $existing = (git -C $root ls-remote --tags origin "refs/tags/v$Version" | Out-String).Trim()
+  if ($existing) { throw "v$Version is already released. Pick a new version." }
 }
 
 if ($Version -ne $current) {
