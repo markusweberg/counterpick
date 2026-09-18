@@ -444,10 +444,19 @@ public sealed class Bridge
         return Counts(DataTransfer.ImportJson(_storage, dialog.FileName));
     }
 
-    /// <summary>Open a folder in Explorer, selecting the file when given one.</summary>
+    /// <summary>
+    /// Open what the UI points at: a page in the browser, a folder in Explorer, or a
+    /// folder with the file selected. The update source is a web address now that
+    /// releases live on GitHub, and still a folder when one is packed locally, so this
+    /// has to take both. Only http(s) is followed - nothing else here should be handing
+    /// arbitrary protocol handlers to the shell.
+    /// </summary>
     private static void Reveal(string path)
     {
-        if (Directory.Exists(path))
+        if (path.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+        else if (Directory.Exists(path))
             Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
         else if (File.Exists(path))
             Process.Start("explorer.exe", $"/select,\"{path}\"");

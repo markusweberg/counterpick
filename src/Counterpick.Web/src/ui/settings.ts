@@ -105,7 +105,7 @@ function updateLine(): string {
   if (!u) return "Waiting for the host.";
   switch (u.state) {
     case "not-installed":
-      return "This copy runs from a build folder, so it cannot swap itself. Install it with the Setup from tools/release.ps1 to get updates here.";
+      return "This copy runs from a build folder, so it cannot swap itself. Install it with the Setup from the Releases page to get updates here.";
     case "checking":
       return "Looking for a newer version…";
     case "downloading":
@@ -146,8 +146,8 @@ function updatesPanel(): string {
     </div>
     ${u?.source
       ? `<div class="srcrow"><code>${esc(u.source)}</code><button class="mini" data-act="update-reveal">Open</button></div>
-    <p class="subnote versions">Releases are read from that folder. A newer version there is fetched on startup and applied when you restart.</p>`
-      : `<p class="subnote versions">No release folder yet, so nothing can be fetched on startup.</p>`}
+    <p class="subnote versions">Releases are read from ${/^https:\/\/github\.com\//i.test(u.source) ? "that repository's releases" : "that folder"}. A newer version there is fetched on startup and applied when you restart.</p>`
+      : `<p class="subnote versions">No release source yet, so nothing can be fetched on startup.</p>`}
   </section>`;
 }
 

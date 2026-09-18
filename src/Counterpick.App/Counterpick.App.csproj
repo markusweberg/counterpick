@@ -15,10 +15,12 @@
     <!-- English only; WPF would otherwise publish a dozen locale folders nobody reads. -->
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <!--
-      Where the installed app looks for newer versions. tools/release.ps1 passes the
-      folder it packs into, so a release knows where its successors will be.
+      Where the installed app looks for newer versions. The default is the public
+      Releases page, so a build anyone downloads keeps itself current with no account and
+      no token. tools/release.ps1 passes a local folder instead when packing a release to
+      test before publishing, so a release always knows where its successors will be.
     -->
-    <UpdateSource Condition="'$(UpdateSource)' == ''"></UpdateSource>
+    <UpdateSource Condition="'$(UpdateSource)' == ''">https://github.com/markusweberg/counterpick</UpdateSource>
     <!-- The exe's icon: Explorer, the taskbar and the title bar pick it up from the binary. -->
     <ApplicationIcon>Resources\counterpick.ico</ApplicationIcon>
     <!-- The Vite frontend lives beside this project and is built into it. -->

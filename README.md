@@ -46,37 +46,51 @@ Skip the frontend step with `dotnet build -p:SkipFrontend=true`.
 
 ## Installing it
 
+Download **`Counterpick-win-Setup.exe`** from the
+[latest release](https://github.com/markusweberg/counterpick/releases/latest) and run it.
+That is the whole install: no runtime, no account, nothing to configure but your own API
+key under Settings.
+
 The app is packaged with [Velopack](https://velopack.io): a per-user install under
 `%LOCALAPPDATA%\Counterpick`, shortcuts on the desktop and in the Start Menu, an entry in
-Apps & features, and in-place updates. One script does the whole release:
+Apps & features, and in-place updates. Nothing needs administrator rights.
+
+Windows SmartScreen will warn that the publisher is unknown, because the build is not
+code-signed — More info → Run anyway. A signing certificate is the only thing that
+removes that, and it is not worth it for an app shared with a handful of people.
+
+**Updates take care of themselves.** The installed app checks the Releases page on
+startup, downloads a newer version in the background, and shows **Update ready** in the
+top bar; click it, or use Settings → Restart to update, and it relaunches on the new
+version. Settings also has Check for updates, the current version, and where releases are
+read from. A build started from `bin/` or Visual Studio is not an install, so it cannot
+update itself; Settings says so.
+
+### Cutting a release
 
 ```
-.\tools\release.ps1
+.\tools\release.ps1 -Publish
 ```
 
 It bumps the patch number in the `.csproj` (or takes `-Version 1.2.0`), publishes a
-self-contained build, and packs it into `artifacts\releases`: `Counterpick-win-Setup.exe`
-for the first install, plus the full package and a delta from the previous release.
-Commit the version bump with the release.
+self-contained build, packs it into `artifacts\releases`, commits and pushes the version
+bump, and uploads the result to GitHub as a release tagged `v1.2.0`. Needs the GitHub CLI
+logged in (`gh auth login`) or `GITHUB_TOKEN` set.
 
-**The first time**, double-click the Setup. **Every time after that**, just run the script.
-The installed app looks in the release folder on startup, downloads a newer version in
-the background, and shows **Update ready** in the top bar; click it, or use
-Settings → Restart to update, and it relaunches on the new version. Settings also has
-Check for updates, the current version, and where releases are read from.
-
-The release folder is baked into each build by the script (`-Out` changes it; a OneDrive
-folder lets a second PC install and update from the same releases), and `updateSource` in
-`config.json` overrides it on one machine. A build started from `bin/` or Visual Studio is
-not an install, so it cannot update itself; Settings says so.
+Leave off `-Publish` to pack without publishing. That build updates from
+`artifacts\releases` rather than from GitHub, which is how you install and try a release
+before anyone else sees it; `-Out` points it somewhere else, and `updateSource` in
+`config.json` overrides the source on one machine.
 
 Updating never touches your data - not `%APPDATA%\Counterpick`, not
 `Documents\Counterpick` - and neither does uninstalling.
 
 ### Sharing it
 
-Hand a friend `Counterpick-win-Setup.exe`. Each person uses **their own Anthropic API key**
-and pays for their own calls - about 10 cents a game (the first real draft cost 9).
+Send a friend the [releases page](https://github.com/markusweberg/counterpick/releases/latest)
+and they take it from there; the Setup is the only file they need. Each person uses
+**their own Anthropic API key** and pays for their own calls - about 10 cents a game (the
+first real draft cost 9).
 
 - They create a key at [console.anthropic.com](https://console.anthropic.com), add credit,
   and **set a monthly spend limit** on it there. Then paste it under Settings.

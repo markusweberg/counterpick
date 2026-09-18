@@ -10,11 +10,14 @@ namespace Counterpick.App.Services;
 /// Keeps the installed app current.
 ///
 /// Velopack installs the app under %LOCALAPPDATA%\Counterpick and puts the shortcuts in
-/// place; this class is the half that runs afterwards. It watches a release folder -
-/// the one <c>tools/release.ps1</c> packs into - and when a newer version is there it
-/// downloads it in the background and offers a restart. The folder is baked into the
-/// build by the release script, so whoever packs a release decides where updates come
-/// from; <see cref="AppConfig.UpdateSource"/> overrides it per machine.
+/// place; this class is the half that runs afterwards. It watches a release source and
+/// when a newer version is there it downloads it in the background and offers a restart.
+///
+/// The source is normally this project's GitHub Releases page, so anyone who installed
+/// from a download keeps updating from the same place with no account and no token. It
+/// can equally be a folder - the one <c>tools/release.ps1</c> packs into - which is how a
+/// release is tried before it is published. Either way it is baked into the build by the
+/// release script; <see cref="AppConfig.UpdateSource"/> overrides it per machine.
 ///
 /// A build run from bin/ or from Visual Studio is not installed and cannot be updated in
 /// place. It still reports its version, and says why the buttons are inert.
@@ -150,11 +153,27 @@ public sealed class UpdateService
         mgr.ApplyUpdatesAndRestart(info);
     }
 
+    /// <summary>True when the source is a GitHub repository rather than a folder or plain feed.</summary>
+    public static bool IsGithub(string source) =>
+        source.StartsWith("https://github.com/", StringComparison.OrdinalIgnoreCase);
+
     private UpdateManager? Manager()
     {
         if (_manager is not null) return _manager;
         var source = Source;
         if (source is null) return null;
+
+        // A GitHub repository is not a feed that can be read directly: the releases and
+        // the assets hanging off them are resolved through the API, which is what
+        // GithubSource does. No token, because the repository is public - unauthenticated
+        // requests are capped at 60 an hour per IP, far more than a check on startup and
+        // the occasional manual one. Pre-releases are skipped, so a draft or a release
+        // marked pre is invisible until it is promoted.
+        if (IsGithub(source))
+        {
+            _manager = new UpdateManager(new GithubSource(source, null, false));
+            return _manager;
+        }
 
         // A missing folder is not fatal - the drive may be unplugged, or nothing has been
         // packed yet - so report it rather than throw from a constructor.
