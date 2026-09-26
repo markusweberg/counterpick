@@ -69,15 +69,22 @@ public sealed class AppConfig
 
     /// <summary>
     /// Model for the full matchup brief. Read on the loading screen, so it can afford the
-    /// stronger model's extra seconds.
+    /// stronger model's extra seconds. A family ("opus") runs on its newest model; a full
+    /// id pins one. See <see cref="ClaudeClient.Families"/>.
     /// </summary>
-    public string Model { get; set; } = "claude-opus-5";
+    public string Model { get; set; } = "opus";
 
     /// <summary>
     /// Model for the ranked shortlist during pick phase, where the whole answer has to
     /// land inside a 27-second timer. Sonnet is the latency choice.
     /// </summary>
-    public string ShortlistModel { get; set; } = "claude-sonnet-5";
+    public string ShortlistModel { get; set; } = "sonnet";
+
+    /// <summary>
+    /// Whether the pool is ranked during pick phase at all. Off saves every shortlist call
+    /// for a player who already knows what they will pick; the brief is still written.
+    /// </summary>
+    public bool ShortlistEnabled { get; set; } = true;
 
     /// <summary>The role you queue for. Drives which enemy pick counts as your lane opponent.</summary>
     public string PrimaryRole { get; set; } = "Top";
@@ -134,6 +141,10 @@ public sealed class AppConfig
         {
             var config = JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(AppPaths.ConfigFile), Json)
                          ?? new AppConfig();
+            // Older builds stored exact ids from a fixed list. Those become their family, so
+            // they follow new releases like a fresh install; a hand-typed id stays pinned.
+            config.Model = config.ToFamily(config.Model);
+            config.ShortlistModel = config.ToFamily(config.ShortlistModel);
             // An older build left the key in the clear; the first load takes it off disk.
             if (config._migrated) config.Save();
             return config;
@@ -146,6 +157,20 @@ public sealed class AppConfig
             File.Copy(AppPaths.ConfigFile, broken, overwrite: true);
             return new AppConfig();
         }
+    }
+
+    private string ToFamily(string model)
+    {
+        var family = model switch
+        {
+            "claude-opus-5" => "opus",
+            "claude-sonnet-5" => "sonnet",
+            "claude-haiku-4-5" => "haiku",
+            _ => null
+        };
+        if (family is null) return model;
+        _migrated = true;
+        return family;
     }
 
     public void Save()

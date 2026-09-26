@@ -98,13 +98,14 @@ public sealed class Bridge
     private object? Dispatch(string method, JsonNode? p) => method switch
     {
         // ── settings ────────────────────────────────────────────────────
-        "config.get" => ConfigView(),
+        "config.get" => ConfigViewAsync(),
 
         "config.setApiKey" => Run(() =>
         {
             var key = Str(p, "apiKey")?.Trim();
             _config.ApiKey = string.IsNullOrEmpty(key) ? null : key;
             _config.Save();
+            _claude.ForgetModels();
         }),
 
         "config.set" => Run(() =>
@@ -112,6 +113,7 @@ public sealed class Bridge
             if (Str(p, "primaryRole") is { } role) _config.PrimaryRole = role;
             if (Str(p, "model") is { } model) _config.Model = model;
             if (Str(p, "shortlistModel") is { } fast) _config.ShortlistModel = fast;
+            if (Str(p, "shortlistEnabled") is { } tips) _config.ShortlistEnabled = tips == "true";
             if (p?["workspaceId"] is not null)
             {
                 var ws = Str(p, "workspaceId")?.Trim();
@@ -242,13 +244,15 @@ public sealed class Bridge
 
     // ── settings ─────────────────────────────────────────────────────────
 
-    private object ConfigView() => new
+    private async Task<object> ConfigViewAsync() => new
     {
+        latestModels = await _claude.LatestModelsAsync(),
         hasApiKey = _claude.HasApiKey,
         keyUnreadable = _config.KeyUnreadable,
         workspaceId = _config.WorkspaceId ?? "",
         model = _config.Model,
         shortlistModel = _config.ShortlistModel,
+        shortlistEnabled = _config.ShortlistEnabled,
         primaryRole = _config.PrimaryRole,
         dataDragonVersion = _catalog.Version ?? _config.DataDragonVersion,
         roleRatesPatch = _rates.Patch,

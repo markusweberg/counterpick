@@ -5,7 +5,7 @@ import { champion } from "../champions";
 import {
   bestScores, briefFor, laneConfidence, laneOpponent, laneSettled, notesFor, poolBorrowed, state,
 } from "../state";
-import { availablePool, scoringBlocker } from "../session";
+import { availablePool, scoringBlocker, tipsOff } from "../session";
 import type { NoteRecord, Recommendation } from "../types";
 import { esc, portrait, recordLabel, rich, VERDICT_CLASS, VERDICT_COLOR } from "./atoms";
 
@@ -209,6 +209,21 @@ export function draftView(): string {
           `Every champion in your pool is banned or already taken. Your pool: ${state.pool.map((k) => esc(champion(k).name)).join(", ")}.`);
   } else if (blocker === "enemy" && !state.live) {
     body = idleView();
+  } else if (tipsOff()) {
+    const pool = availablePool();
+    const selected = state.selected ?? pool[0]!;
+    body = `<div class="bar">
+        <div>
+          <p class="eyebrow">${poolLabel()} · draft tips off</p>
+          <p class="subnote">Nothing is ranked during the pick, so no calls are made until you lock.
+            The matchup brief is written then, as usual. Turn draft tips back on in Settings.</p>
+        </div>
+        <div class="bar-cta">
+          <button class="lock" data-act="lock">Lock in ${esc(champion(selected).name)}</button>
+          ${state.lockError ? `<p class="subnote" style="color:var(--enemy)">${esc(state.lockError)}</p>` : ""}
+        </div>
+      </div>
+      <div class="recs">${pool.map(unscoredCard).join("")}</div>`;
   } else if (blocker === "enemy") {
     const cards = availablePool().map(unscoredCard).join("");
     body = `<div class="bar"><div>

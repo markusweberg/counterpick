@@ -12,14 +12,19 @@ import { state } from "../state";
 import { ROLES } from "../types";
 import { esc, portrait } from "./atoms";
 
-const MODELS: [string, string][] = [
-  ["claude-sonnet-5", "Claude Sonnet 5 · fast"],
-  ["claude-opus-5", "Claude Opus 5 · strongest"],
-  ["claude-haiku-4-5", "Claude Haiku 4.5 · cheapest"],
+/** Families, not versions: each runs on its newest model, looked up when the app starts. */
+const FAMILIES: [string, string][] = [
+  ["sonnet", "Sonnet · fast"],
+  ["opus", "Opus · strong"],
+  ["fable", "Fable · strongest, pricier"],
+  ["haiku", "Haiku · cheapest"],
 ];
 
 function modelSelect(setting: "shortlistModel" | "model", current: string): string {
-  const options = [...MODELS];
+  const latest = state.config?.latestModels ?? {};
+  const options: [string, string][] = FAMILIES.map(([family, label]) =>
+    [family, latest[family] ? `${label} (${latest[family]!.name})` : label]);
+  // A full id in config.json pins that exact model; show it as it is.
   if (!options.some(([id]) => id === current)) options.unshift([current, current]);
   return `<select class="field" data-setting="${setting}">
     ${options.map(([id, label]) => `<option value="${esc(id)}" ${id === current ? "selected" : ""}>${esc(label)}</option>`).join("")}
@@ -219,10 +224,19 @@ export function settingsView(): string {
           </select></div>
         <p class="subnote">The default. In a draft the app follows the role the client assigns you, autofill
           included, and falls back to this role's pool when that one is empty.${onRole}</p>
-        <div class="setting-row"><span class="k">Shortlist</span>${modelSelect("shortlistModel", c?.shortlistModel ?? "claude-sonnet-5")}</div>
-        <div class="setting-row"><span class="k">Brief</span>${modelSelect("model", c?.model ?? "claude-opus-5")}</div>
-        <p class="subnote">The shortlist has to land inside the pick timer. The brief is read on the loading
-          screen and can take its time.</p>
+        <div class="setting-row"><span class="k">Draft tips</span>
+          <select class="field" data-setting="shortlistEnabled" aria-label="Draft tips">
+            <option value="true" ${c?.shortlistEnabled !== false ? "selected" : ""}>On · rank my pool every pick</option>
+            <option value="false" ${c?.shortlistEnabled === false ? "selected" : ""}>Off · matchup brief only</option>
+          </select></div>
+        ${c?.shortlistEnabled !== false
+          ? `<div class="setting-row"><span class="k">Shortlist</span>${modelSelect("shortlistModel", c?.shortlistModel ?? "sonnet")}</div>`
+          : ""}
+        <div class="setting-row"><span class="k">Brief</span>${modelSelect("model", c?.model ?? "opus")}</div>
+        <p class="subnote">${c?.shortlistEnabled === false
+          ? "Draft tips are off: nothing is sent while you pick. Once you lock, the brief on your lane and the enemy team is written as usual - the only call a game makes."
+          : "The shortlist has to land inside the pick timer and is redone as picks come in. The brief is read on the loading screen and can take its time. One-tricks can turn draft tips off and keep only the brief."}
+          Each family runs on its newest model, checked when the app starts.</p>
       </section>
 
       ${poolPanel()}

@@ -378,6 +378,11 @@ function scoringFingerprint(): string {
   ].join("|");
 }
 
+/** Draft tips are off in Settings: the pool is shown unranked and only the brief is written. */
+export function tipsOff(): boolean {
+  return state.config?.shortlistEnabled === false;
+}
+
 /** Why scoring cannot run right now, or null if it can. */
 export function scoringBlocker(): "key" | "pool" | "enemy" | null {
   if (!state.config?.hasApiKey) return "key";
@@ -403,7 +408,7 @@ export function scheduleRescore(delayMs = 1200): void {
 export async function rescore(force = false): Promise<void> {
   if (!isHosted) return;
   if (state.phase !== "draft") return;
-  if (scoringBlocker()) {
+  if (tipsOff() || scoringBlocker()) {
     state.scoring = "idle";
     return;
   }

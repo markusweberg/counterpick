@@ -6,8 +6,8 @@ import {
   addNote, emptyDataState, emptySettingsState, laneOpponent, state,
 } from "./state";
 import {
-  bindRender, boot, changeRole, ensureBrief, loadPool, lockIn, newDraft, reloadConfig, rescore,
-  timerRemaining, userAssignedRole,
+  availablePool, bindRender, boot, changeRole, ensureBrief, loadPool, lockIn, newDraft, reloadConfig, rescore,
+  scheduleRescore, timerRemaining, userAssignedRole,
 } from "./session";
 import type { Phase, Role } from "./types";
 import { clock } from "./ui/atoms";
@@ -384,7 +384,8 @@ app.addEventListener("click", (e) => {
   switch (action) {
     case "lock": {
       // The button names the top recommendation when nothing has been clicked; lock that.
-      const key = state.selected ?? state.recommendations[0]?.championKey;
+      // With draft tips off there is no ranking, so it is the first of the pool.
+      const key = state.selected ?? state.recommendations[0]?.championKey ?? availablePool()[0];
       if (!key) return;
       // In a live draft the client does the locking; its session update moves the app on.
       if (state.live && isHosted) {
@@ -452,6 +453,8 @@ app.addEventListener("change", (e) => {
     void settingsAction(async () => {
       await call("config.set", { [name]: value });
       await reloadConfig();
+      // Tips back on mid-draft: rank the board now rather than on the next pick.
+      if (name === "shortlistEnabled") scheduleRescore(0);
       return null;
     });
   }

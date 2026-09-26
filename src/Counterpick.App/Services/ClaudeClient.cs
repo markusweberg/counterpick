@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Anthropic;
 using Anthropic.Models.Messages;
+using Anthropic.Models.Models;
 
 namespace Counterpick.App.Services;
 
@@ -46,6 +47,9 @@ public sealed record ShortlistResult(List<ShortlistEntry> Recommendations, List<
 public sealed record LaneBeat(string Mark, string Text);
 public sealed record SetupDto(string Keystone, string Secondary, string Summoners, string First);
 
+/// <summary>A family's newest model, as the Models API names it.</summary>
+public sealed record ModelChoice(string Id, string Name);
+
 /// <summary>Mirrors Brief in types.ts exactly, so the response drops straight into the view.</summary>
 public sealed record BriefDto(
     string Headline,
@@ -85,6 +89,62 @@ public sealed class ClaudeClient
     }
 
     public bool HasApiKey => !string.IsNullOrWhiteSpace(_config.ApiKey);
+
+    /// <summary>
+    /// The model settings Counterpick offers: a family, always run on its newest model.
+    /// A full model id in the config instead pins that exact model.
+    /// </summary>
+    public static readonly string[] Families = ["opus", "sonnet", "haiku", "fable"];
+
+    // Only for when the Models API cannot be reached. Stale ids here cost nothing while it can.
+    private static readonly Dictionary<string, string> Fallback = new()
+    {
+        ["opus"] = "claude-opus-5-5",
+        ["sonnet"] = "claude-sonnet-5",
+        ["haiku"] = "claude-haiku-4-5",
+        ["fable"] = "claude-fable-5-1"
+    };
+
+    private IReadOnlyDictionary<string, ModelChoice>? _latest;
+
+    /// <summary>
+    /// The newest model in each family this key can use, looked up once per run: a model
+    /// released tomorrow is picked up on the next start, with no new build.
+    /// Empty when there is no key or the lookup failed; <see cref="ResolveAsync"/> falls back.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, ModelChoice>> LatestModelsAsync(CancellationToken ct = default)
+    {
+        if (_latest is not null) return _latest;
+        if (!HasApiKey) return new Dictionary<string, ModelChoice>();
+        try
+        {
+            var page = await Client().Models.List(new ModelListParams { Limit = 1000 }, ct);
+            var latest = new Dictionary<string, ModelChoice>();
+            foreach (var m in page.Items.OrderByDescending(m => m.CreatedAt))
+                foreach (var family in Families)
+                    if (m.ID.StartsWith($"claude-{family}-") && !latest.ContainsKey(family))
+                        latest[family] = new ModelChoice(m.ID, m.DisplayName);
+            Trace.Write("claude", $"newest models: {string.Join(", ", latest.Select(kv => $"{kv.Key}={kv.Value.Id}"))}");
+            return _latest = latest;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Not cached: the next call tries again, and until then the fallback ids serve.
+            Trace.Write("claude", $"model lookup failed, using built-in ids: {ex.Message}");
+            return new Dictionary<string, ModelChoice>();
+        }
+    }
+
+    /// <summary>A new key may see different models; look them up again.</summary>
+    public void ForgetModels() => _latest = null;
+
+    /// <summary>The model id to send for a setting: a family's newest, or a pinned id as is.</summary>
+    public async Task<string> ResolveAsync(string setting, CancellationToken ct = default)
+    {
+        if (!Fallback.TryGetValue(setting, out var fallback)) return setting;
+        var latest = await LatestModelsAsync(ct);
+        return latest.TryGetValue(setting, out var m) ? m.Id : fallback;
+    }
 
     private IAnthropicClient Client()
     {
@@ -168,6 +228,7 @@ public sealed class ClaudeClient
                                         string schemaJson, string user, CancellationToken ct)
     {
         var client = Client();
+        model = await ResolveAsync(model, ct);
         var response = await client.Messages.Create(new MessageCreateParams
         {
             Model = model,
@@ -180,7 +241,9 @@ public sealed class ClaudeClient
             Messages = [new() { Role = Role.User, Content = user }],
             OutputConfig = new OutputConfig
             {
-                Effort = effort,
+                // Haiku 4.5 rejects effort outright. Everything newer takes it, and Opus 5.5
+                // would otherwise drop to its own lower default.
+                Effort = model.StartsWith("claude-haiku-4-5") ? null : effort,
                 Format = new JsonOutputFormat { Schema = SchemaDictionary(schemaJson) }
             }
         }, ct);

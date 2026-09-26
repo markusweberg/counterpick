@@ -174,6 +174,10 @@ export interface AppConfigView {
   workspaceId: string;
   model: string;
   shortlistModel: string;
+  /** False: no ranking during pick phase, only the brief once you lock. */
+  shortlistEnabled: boolean;
+  /** The newest model in each family ("opus", "sonnet", ...) the key can use. Empty when unknown. */
+  latestModels: Record<string, { id: string; name: string }>;
   primaryRole: Role;
   dataDragonVersion: string | null;
   /** The patch the enemy-role play rates describe, and where they came from ("feed", "cache", "bundled"). */
